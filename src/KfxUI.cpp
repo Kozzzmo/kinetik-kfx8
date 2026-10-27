@@ -574,7 +574,7 @@ protected:
     // the selected lane: LCD (name, what it does, a picture of its knobs) + its 5 knobs
     bool knobUsed(int k) const { return k >= kKnobs || kLaneDefs[selLane].knob[k] != nullptr; }
     static int modParam(int i, int k) { return i < kLfos ? lfoParam(i, k) : gENV_SENS + k; }
-    int modKnobs() const { return edLfo < kLfos ? kLfoParams : 5; }
+    int modKnobs() const { return edLfo < kLfos ? kLfoParams : 6; }
     const char* kName(int l, int k) const { return laneKnobName(l, k, lp(l, 6)); }
     // LFOs aiming at lane l knob k
     std::string lfoBadge(int l, int k) const
@@ -681,8 +681,11 @@ protected:
         const int dest = (int)std::lround(gp(gENV_DEST));
         label(lc.x + 12, lc.y + 46, ("TO: " + lfoDestText(dest)).c_str(), 10.f, dest > 0 ? th->lcdText : th->lcdDim, ALIGN_LEFT | ALIGN_MIDDLE);
         fontFace(NANOVG_DEJAVU_SANS_TTF); fontSize(11.f); fillColor(th->lcdDim); textAlign(ALIGN_LEFT | ALIGN_TOP); textLineHeight(1.2f);
-        textBox(lc.x + 12, lc.y + 64, lc.w - 24, "The level of the incoming sound moves a knob: louder = further. SENS sets how loud is loud.", nullptr);
-        for (int k = 0; k < 5; ++k) {
+        textBox(lc.x + 12, lc.y + 64, lc.w - 24, sideSource(gp(gENV_SRC))
+                    ? "The level of the SIDE-CHAIN input (route a kick or a loop to it in your music software) moves a knob: louder = further."
+                    : "The level of the incoming sound moves a knob: louder = further. SENS sets how loud is loud.", nullptr);
+        if (sideSource(gp(gENV_SRC))) drawScMeter({lc.x + 12, lc.y + 120, lc.w - 24, 0});
+        for (int k = 0; k < 6; ++k) {
             const float v = gp(gENV_SENS + k);
             drawKnob(knobR(k), k == 4 ? v / (kLfoDests - 1) : v / 127.f, kEnvKnobs[k], k == 4 ? (dest > 0 ? std::string("CLICK: ") + kLaneNames[(dest - 1) / kLaneParams] : "CLICK") : envValueText(k, v),
                      false, drag == dkLfo && dragIndex == k, 22.f, 40.f, 84.f, 102.f);
@@ -725,6 +728,16 @@ protected:
     }
 
     // a small picture of what the lane does with its current knobs
+    // side-chain level (top right of the LCD): tells whether the host sends anything to the side-chain input
+    void drawScMeter(const R& lc)
+    {
+        const float lv = clampf(gp(gOUT_SC), 0.f, 1.f), db = lv > 1e-4f ? 20.f * std::log10(lv) : -80.f;
+        const float u = clampf((db + 48.f) / 48.f, 0.f, 1.f);
+        const R m{lc.x + lc.w - 124, lc.y + 12, 120, 8};
+        label(m.x, m.y - 9, lv > 1e-4f ? "SIDECHAIN IN" : "NO SIDECHAIN SIGNAL", 8.5f, lv > 1e-4f ? th->lcdText : th->lock, ALIGN_LEFT | ALIGN_MIDDLE);
+        box(m, withAlpha(th->lcdDim, 0.25f), 2.f);
+        if (u > 0.f) box({m.x, m.y, m.w * u, m.h}, th->lcdText, 2.f);
+    }
     void drawLaneGraphic(int l, const R& g)
     {
         float p[kKnobs]; for (int k = 0; k < kKnobs; ++k) p[k] = knobValue(k);
@@ -768,6 +781,7 @@ protected:
             break;
         }
         case lnComp: {            // in / out in dB, -60 .. 0, plus the gain reduction now
+            if (sideSource(p[6])) drawScMeter({g.x, g.y + g.h - 22, g.w, 0});
             const float thr = compThreshDb(p[0]), ratio = compRatio(p[1]), knee = p[5] / 127.f * 12.f, mk = p[4] / 127.f * 24.f;
             beginPath(); moveTo(g.x, g.y + g.h - 2); lineTo(g.x + g.w, g.y + 2); strokeColor(dim); strokeWidth(1.f); stroke();
             curve([&](float x) {

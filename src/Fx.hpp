@@ -128,9 +128,11 @@ struct Comp {
         makeup = std::pow(10.f, p[4] / 127.f * 24.f / 20.f);
         knee = p[5] / 127.f * 12.f;
     }
-    inline void process(float& l, float& r)
+    inline void process(float& l, float& r) { process(l, r, l, r); }
+    // kl / kr = what the detector listens to (the signal itself, or the side-chain)
+    inline void process(float& l, float& r, float kl, float kr)
     {
-        const float lev = std::max(std::fabs(l), std::fabs(r));
+        const float lev = std::max(std::fabs(kl), std::fabs(kr));
         env = lev > env ? lev : env + (lev - env) * 0.0005f;                     // peak hold for the detector
         const float db = 20.f * std::log10(std::max(env, 1e-6f));
         const float over = db - thr;

@@ -37,9 +37,18 @@ protected:
 
     void initAudioPort(bool input, uint32_t index, AudioPort& port) override
     {
+        if (input && index >= 2) {             // inputs 3 / 4: the side-chain (COMP and ENV follower SOURCE)
+            port.hints = kAudioPortIsSidechain;
+            port.name = index == 2 ? "Sidechain Left" : "Sidechain Right";
+            port.symbol = index == 2 ? "sc_in_left" : "sc_in_right";
+            port.groupId = kPortGroupNone;
+            return;
+        }
         port.groupId = kPortGroupStereo;
         Plugin::initAudioPort(input, index, port);
     }
+    // AU also offers plain stereo (no side-chain): then only 2 inputs come
+    void ioChanged(uint16_t numInputs, uint16_t) override { numIn.store(numInputs); }
 
     void initParameter(uint32_t index, Parameter& p) override
     {
@@ -87,6 +96,9 @@ protected:
             p.ranges.min = 0; p.ranges.max = 255; p.ranges.def = 0; return;
         case gOUT_PATTERN: p.name = "Playing Pattern"; p.symbol = "out_pattern"; p.hints = kParameterIsOutput | kParameterIsInteger;
             p.ranges.min = 0; p.ranges.max = kPatterns - 1; p.ranges.def = 0; return;
+        case gENV_SRC: p.name = "Envelope Source"; p.symbol = "env_source"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = 0; return;
+        case gOUT_SC: p.name = "Side-chain Level"; p.symbol = "out_sc"; p.hints = kParameterIsOutput;
+            p.ranges.min = 0; p.ranges.max = 1; p.ranges.def = 0; return;
         default: break;
         }
     }
@@ -106,6 +118,7 @@ protected:
         case gOUT_STEP: return (float)engine->outStep;
         case gOUT_ACTIVE: return (float)engine->outActive;
         case gOUT_PATTERN: return (float)engine->outPattern;
+        case gOUT_SC: return std::min(1.f, engine->scPeak);
         default: return g < kGlobalParams ? engine->global[g] : 0.f;
         }
     }
@@ -227,6 +240,8 @@ protected:
             tp.beat = beats * (4.0 / bt);
             tp.bpm = pos.bbt.beatsPerMinute > 0 ? pos.bbt.beatsPerMinute : 120.0;
         }
+        const bool sc = numIn.load(std::memory_order_relaxed) >= 4;
+        engine->scL = sc && inputs[2] && inputs[3] ? inputs[2] : nullptr; engine->scR = engine->scL ? inputs[3] : nullptr;
         engine->process(inputs[0], inputs[1], outputs[0], outputs[1], frames, tp);
         if (lic::kDemoModeEnabled && !licensed.load(std::memory_order_relaxed)) demoGate(inputs, outputs, frames);
     }
@@ -251,6 +266,7 @@ private:
     std::unique_ptr<Bank> master;
     mutable std::mutex masterMutex;
     std::atomic<uint32_t> dirty{0};
+    std::atomic<int> numIn{DISTRHO_PLUGIN_NUM_INPUTS};
     std::atomic<bool> licensed{false};
     std::atomic<uint32_t> uiHoldMask{0};
     uint32_t midiHoldMask = 0; bool midiFill = false;

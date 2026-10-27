@@ -192,6 +192,35 @@ int main()
         run(setup(64.f), aL, aR); run(setup(127.f), bL, bR);
         check(diff(bL, aL, 4800, frames) > 0.05, "ENV follower moves its destination");
     }
+    {   // side-chain: COMP SOURCE = SIDECHAIN ducks to the side-chain, ENV SOURCE follows it
+        std::vector<float> scL(frames, 0.f), scR(frames, 0.f);
+        for (int i = 0; i < frames; ++i) if ((i / (int)(sr / 2)) % 2 == 0) scL[i] = scR[i] = 0.8f * std::sin(kTwoPi * 60.f * i / sr);   // on 0-0.5 s, off 0.5-1 s...
+        auto runSc = [&](std::function<void(Engine&)> setup, std::vector<float>& oL, bool feed) {
+            std::unique_ptr<Engine> e(new Engine()); e->init(sr); e->global[gPLAY] = 1.f; setup(*e);
+            oL.assign(frames, 0); std::vector<float> oR(frames);
+            for (int p = 0; p < frames; p += 256) {
+                const uint32_t n = std::min(256, frames - p);
+                e->scL = feed ? scL.data() + p : nullptr; e->scR = feed ? scR.data() + p : nullptr;
+                e->process(inL.data() + p, inR.data() + p, oL.data() + p, oR.data() + p, n, Transport());
+            }
+        };
+        auto rmsR = [&](const std::vector<float>& x, int a, int b) { double q = 0; for (int i = a; i < b; ++i) q += x[i] * x[i]; return std::sqrt(q / (b - a)); };
+        auto comp = [](Engine& e) { e.bank.always[lnComp] = 1; e.laneParam[lnComp][0] = 50.f; e.laneParam[lnComp][1] = 110.f; e.laneParam[lnComp][2] = 5.f; e.laneParam[lnComp][3] = 30.f; e.laneParam[lnComp][6] = 127.f; };
+        std::vector<float> o, o2;
+        runSc(comp, o, true);
+        const double gOn = rmsR(o, (int)(1.1 * sr), (int)(1.45 * sr)) / rmsR(inL, (int)(1.1 * sr), (int)(1.45 * sr));
+        const double gOff = rmsR(o, (int)(1.75 * sr), (int)(1.98 * sr)) / rmsR(inL, (int)(1.75 * sr), (int)(1.98 * sr));
+        std::printf("     side-chain on: x%.2f  off: x%.2f\n", gOn, gOff);
+        check(gOn < gOff * 0.6, "COMP SOURCE = SIDECHAIN: ducks while the side-chain plays");
+        runSc(comp, o2, false);
+        const double gNo = rmsR(o2, (int)(1.1 * sr), (int)(1.45 * sr)) / rmsR(inL, (int)(1.1 * sr), (int)(1.45 * sr));
+        check(gNo > 0.9 && gNo < 1.1, "COMP SOURCE = SIDECHAIN with nothing connected: no gain reduction");
+        std::vector<float> ea, eb;
+        auto env = [](float src) { return [src](Engine& e) { e.bank.always[lnFilter] = 1; e.laneParam[lnFilter][0] = 30.f;
+            e.global[gENV_DEST] = (float)(1 + lpIndex(lnFilter, 0)); e.global[gENV_DEPTH] = 127.f; e.global[gENV_SRC] = src; }; };
+        runSc(env(0.f), ea, true); runSc(env(127.f), eb, true);
+        check(diff(eb, ea, 4800, frames) > 0.05, "ENV SOURCE = SIDECHAIN: follows the side-chain, not the input");
+    }
     {   // PERFORM models: stutter, reverse, tape stop all different, bounded
         std::vector<std::vector<float>> outs; bool ok2 = true;
         for (int m = 0; m < kPerformModels; ++m) {

@@ -40,3 +40,10 @@ View file `KinetikKFX8-view.txt` ("skin zoom").
   `tests/update.cpp`. VST3 validator: 47/47.
 - CI workflow (`.github/workflows/build.yml`) adapted from KDSP-16 (no samples; auval `aumf KFX8 Kntk`); every push to `main`
   builds and publishes the release `v$(cat VERSION)`.
+
+## Added in 0.3.0
+
+- Side-chain: `DISTRHO_PLUGIN_NUM_INPUTS 4` (inputs 3 / 4 = `kAudioPortIsSidechain`, no port group), `DISTRHO_PLUGIN_EXTRA_IO
+  { 2, 2 }` so AU also offers plain stereo; `ioChanged` stores the input count, `Engine::scL / scR` = nullptr when there is
+  none. COMP knob 6 = SOURCE (`sideSource`, >= 64 = side-chain; nothing connected = no gain reduction), global `gENV_SRC`
+  (added before the outputs), output `gOUT_SC` (side-chain peak, `drawScMeter` in the COMP and ENV LCDs).

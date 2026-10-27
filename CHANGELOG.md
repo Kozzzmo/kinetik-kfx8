@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Side-chain input (VST3 / CLAP; a second stereo input): COMP SOURCE = SIDECHAIN ducks the sound to it (a kick on the
+  side-chain pumps the loop), ENV follower SOURCE = SIDECHAIN moves any knob with it. The LCD shows whether the
+  side-chain receives anything. AU stays plain stereo.
+
 ## 0.2.0
 
 - New effects: DRIVE, CRUSH, FILTER, COMP, CHORUS, FLANGER, DELAY (DIGITAL / TAPE / BBD / DIFFUSE / MULTI-TAP),

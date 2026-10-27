@@ -58,7 +58,9 @@ public:
         inG = outG = dwG = -1.f; chainPl.reset(); envVal = 0.f; prevHold = 0;
     }
     float compMeter() const { return comp.meter; }
-    float lfoOut[kMods] = {};                     // last modulation values (-1..1, depth applied) for the UI
+    float lfoOut[kMods] = {};
+    const float* scL = nullptr; const float* scR = nullptr;   // side-chain input of the next process() (nullptr = none)
+    float scPeak = 0.f;                                     // its level, for the UI                     // last modulation values (-1..1, depth applied) for the UI
 
     void process(const float* inL, const float* inR, float* outL, float* outR, uint32_t frames, const Transport& tp)
     {
@@ -170,8 +172,11 @@ public:
             outStep = playing ? (int)((int64_t)std::floor(beat / 0.25 * kFine) % (32768LL * kFine)) : -1;
             // ---- modulation: two LFOs and the envelope follower (the input level of this segment)
             {
-                float pk = 0.f;
-                for (uint32_t i = 0; i < n; ++i) pk = std::max(pk, std::max(std::fabs(inL[pos + i]), std::fabs(inR[pos + i])));
+                float pk = 0.f, sp = 0.f;
+                if (scL && scR) for (uint32_t i = 0; i < n; ++i) sp = std::max(sp, std::max(std::fabs(scL[pos + i]), std::fabs(scR[pos + i])));
+                scPeak = std::max(sp, scPeak * 0.995f);
+                if (sideSource(global[gENV_SRC])) pk = sp;
+                else for (uint32_t i = 0; i < n; ++i) pk = std::max(pk, std::max(std::fabs(inL[pos + i]), std::fabs(inR[pos + i])));
                 pk *= std::pow(10.f, (global[gENV_SENS] - 64.f) / 64.f * 24.f / 20.f);
                 envVal += (pk - envVal) * (pk > envVal ? envAtk : envRel);
             }
@@ -185,6 +190,7 @@ public:
             if (pm == 0) stut.set(lane[lnPerform].p, ctx); else if (pm == 1) rv.set(lane[lnPerform].p, ctx); else tape.set(lane[lnPerform].p, ctx);
             if (lane[lnPerform].runStart) { if (pm == 0) stut.start(now); else if (pm == 1) rv.start(now); else tape.start(now); }
             for (auto& L : lane) L.runStart = false;
+            const bool compSide = sideSource(lane[lnComp].p[6]);     // no side-chain connected = nothing to duck to
             // ---- samples, through the lanes in their order
             for (uint32_t i = 0; i < n; ++i) {
                 inG += (tIn - inG) * sm; outG += (tOut - outG) * sm; dwG += (tDw - dwG) * sm;
@@ -217,7 +223,7 @@ public:
                     case lnDrive: drive.process(wl, wr); break;
                     case lnCrush: crush.process(wl, wr); break;
                     case lnFilter: filt.process(wl, wr); break;
-                    case lnComp: comp.process(wl, wr); break;
+                    case lnComp: if (compSide) comp.process(wl, wr, scL ? scL[pos + i] : 0.f, scR ? scR[pos + i] : 0.f); else comp.process(wl, wr); break;
                     case lnChorus: chorus.process(wl, wr); break;
                     default: flanger.process(wl, wr); break;
                     }

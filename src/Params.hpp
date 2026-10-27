@@ -26,7 +26,7 @@ static const LaneDef kLaneDefs[kLanes] = {
     {{"AMOUNT", "TYPE", "TONE", "LOW CUT", "BIAS", "LEVEL", nullptr},      {50, 0, 90, 0, 64, 64, 0, 127},   "Saturation: soft, hard, folded or tube-like"},
     {{"BITS", "RATE", "NOISE", "DRIVE", "TONE", "LEVEL", nullptr},         {70, 40, 0, 30, 110, 64, 0, 127}, "Bit and sample-rate reduction"},
     {{"CUTOFF", "RESO", "TYPE", "SWEEP", "ENV", "DRIVE", nullptr},         {50, 60, 0, 64, 64, 0, 0, 127},   "Resonant filter; SWEEP moves it across each step, ENV follows the level"},
-    {{"THRESH", "RATIO", "ATTACK", "RELEASE", "MAKEUP", "KNEE", nullptr},  {70, 60, 30, 50, 0, 40, 0, 127},  "Compressor (MIX below 100% = parallel compression)"},
+    {{"THRESH", "RATIO", "ATTACK", "RELEASE", "MAKEUP", "KNEE", "SOURCE"},  {70, 60, 30, 50, 0, 40, 0, 127},  "Compressor. MIX < 100% = parallel; SOURCE SIDECHAIN = ducks to the side-chain"},
     {{"RATE", "DEPTH", "DELAY", "VOICES", "WIDTH", "TONE", nullptr},       {40, 60, 50, 32, 100, 110, 0, 64},"Chorus: one to four modulated voices"},
     {{"RATE", "SYNC", "DEPTH", "MANUAL", "FEEDBACK", "WIDTH", nullptr},    {30, 0, 80, 40, 90, 80, 0, 127},  "Flanger: a very short modulated delay with feedback"},
     {{"TIME", "FEEDBACK", "TONE", "WIDTH", "MOD", "DUCK", "MODEL"},        {88, 64, 80, 64, 0, 0, 0, 90},    "Echo in tempo: digital, tape, BBD, diffuse or multi-tap"},
@@ -74,10 +74,14 @@ enum Global {
     gLFO1_WAVE, gLFO1_RATE, gLFO1_SYNC, gLFO1_DEPTH, gLFO1_DEST, gLFO1_PHASE,
     gLFO2_WAVE, gLFO2_RATE, gLFO2_SYNC, gLFO2_DEPTH, gLFO2_DEST, gLFO2_PHASE,
     gENV_SENS, gENV_ATTACK, gENV_RELEASE, gENV_DEPTH, gENV_DEST,            // envelope follower (the input level as a modulation)
-    gOUT_STEP, gOUT_ACTIVE, gOUT_PATTERN, kGlobalParams
+    gENV_SRC,                                                              // 0.3: follows the input or the side-chain
+    gOUT_STEP, gOUT_ACTIVE, gOUT_PATTERN, gOUT_SC, kGlobalParams
 };
 static constexpr int kLfos = 2, kLfoParams = 6, kMods = 3;   // mod source 2 = the envelope follower (5 knobs)
-static const char* const kEnvKnobs[5] = {"SENS", "ATTACK", "RELEASE", "DEPTH", "DEST"};
+static const char* const kEnvKnobs[6] = {"SENS", "ATTACK", "RELEASE", "DEPTH", "DEST", "SOURCE"};
+// SOURCE (ENV follower, COMP): the main input or the side-chain input (VST3 / CLAP)
+inline bool sideSource(float v) { return v >= 64.f; }
+inline const char* sourceText(float v) { return sideSource(v) ? "SIDECHAIN" : "INPUT"; }
 inline int lfoParam(int i, int k) { return gLFO1_WAVE + i * kLfoParams + k; }
 static const char* const kLfoKnobs[kLfoParams] = {"WAVE", "RATE", "SYNC", "DEPTH", "DEST", "PHASE"};
 static constexpr int kLfoWaves = 6;
@@ -150,6 +154,7 @@ inline std::string laneValueText(int lane, int k, float v)
         if (k == 2) return fmtMs(compAttackMs(v));
         if (k == 3) return fmtMs(compReleaseMs(v));
         if (k == 4) return fmtDb(v / 127.f * 24.f);
+        if (k == 6) return sourceText(v);
         std::snprintf(b, sizeof(b), "%.1f DB", v / 127.f * 12.f); return b;
     case lnChorus:
         if (k == 0) { std::snprintf(b, sizeof(b), "%.2f HZ", rateHz(v, 0.05f, 5.f)); return b; }
@@ -245,6 +250,7 @@ inline std::string envValueText(int k, float v)
     case 1: return fmtMs(1.f + v / 127.f * 199.f);
     case 2: return fmtMs(10.f + v / 127.f * 1990.f);
     case 3: return fmtBip(v);
+    case 5: return sourceText(v);
     default: return lfoDestText((int)std::lround(v));
     }
 }
