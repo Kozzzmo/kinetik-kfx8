@@ -3,9 +3,7 @@
 Kinetik KFX-8 is a sequenced multi-effect plug-in (VST3 / AU / CLAP, built with DPF and NanoVG): 8 effects on 8
 parallel lanes of steps (owner's choice: "8 effets, 8 lignes en parallèle"). All DSP is original code. Family:
 KDSP-16 (`Kozzzmo/kinetik-kdsp16`), KMSP-6, KJNG-2, KDYN-10; next products KBAS-1 (acid bass) and KGRN-4 (granular).
-**Repository not created on GitHub yet** (owner: "construis en local d'abord"); it was built in
-`/home/claude/kinetik-kfx8` with `dpf` symlinked to the KDSP-16 checkout. The update URL already points to
-`Kozzzmo/kinetik-kfx8`.
+Repository: `Kozzzmo/kinetik-kfx8` (public, created 2026-10-27; first built locally in `/home/claude/kinetik-kfx8`, with `dpf` symlinked to the KDSP-16 checkout).
 
 ## Source map (`src/`)
 
@@ -40,5 +38,5 @@ View file `KinetikKFX8-view.txt` ("skin zoom").
 - Tests: `tests/engine.cpp` (each lane changes the sound only on its steps, locks, bypass, DRY/WET, pattern change at
   the bar, MIDI hold when stopped), `tests/bank.cpp` (text round trip, commands, presets), `tests/license.cpp`,
   `tests/update.cpp`. VST3 validator: 47/47.
-- CI workflow (`.github/workflows/build.yml`) adapted from KDSP-16 (no samples; auval `aumf KFX8 Kntk`); it runs once
-  the repository exists on GitHub with the same secrets (`KINETIK_UPDATE_KEY`...).
+- CI workflow (`.github/workflows/build.yml`) adapted from KDSP-16 (no samples; auval `aumf KFX8 Kntk`); every push to `main`
+  builds and publishes the release `v$(cat VERSION)`.
