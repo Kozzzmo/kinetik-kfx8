@@ -30,7 +30,7 @@ public:
 
 protected:
     const char* getLabel() const override { return "KinetikKFX8"; }
-    const char* getDescription() const override { return "Sequenced multi-effect: 8 effects switched on and off by 8 lanes of steps, with per-step locks"; }
+    const char* getDescription() const override { return "Sequenced multi-effect: 8 effects, each always on or switched by its own lane of steps, with per-step locks"; }
     const char* getMaker() const override { return "Kinetik"; }
     const char* getLicense() const override { return "Proprietary"; }
     uint32_t getVersion() const override { return d_version(KN_VER_MAJOR, KN_VER_MINOR, KN_VER_MICRO); }
@@ -47,7 +47,7 @@ protected:
         if ((int)index < kGlobalBase) {
             const int l = (int)index / kLaneParams, k = (int)index % kLaneParams;
             static char names[kGlobalBase][40], syms[kGlobalBase][24];
-            const char* kn = k < kKnobs ? kLaneDefs[l].knob[k] : "MIX";
+            const char* kn = k < kKnobs ? (kLaneDefs[l].knob[k] ? kLaneDefs[l].knob[k] : "UNUSED") : "MIX";
             std::snprintf(names[index], sizeof(names[index]), "%s %s", kLaneNames[l], kn);
             std::snprintf(syms[index], sizeof(syms[index]), "l%d_%d", l + 1, k + 1);
             for (char* c = names[index] + std::strlen(kLaneNames[l]) + 1; *c; ++c) *c = (char)std::tolower((unsigned char)*c);   // "STUTTER size"
@@ -65,6 +65,22 @@ protected:
             p.hints |= kParameterIsBoolean | kParameterIsInteger; return;
         case gPATTERN: p.name = "Pattern"; p.symbol = "pattern"; p.ranges.min = 0; p.ranges.max = kPatterns - 1; p.ranges.def = 0;
             p.hints |= kParameterIsInteger; return;
+        case gLFO1_WAVE: case gLFO1_RATE: case gLFO1_SYNC: case gLFO1_DEPTH: case gLFO1_DEST: case gLFO1_PHASE:
+        case gLFO2_WAVE: case gLFO2_RATE: case gLFO2_SYNC: case gLFO2_DEPTH: case gLFO2_DEST: case gLFO2_PHASE: {
+            static char nm[12][24], sy[12][16];
+            const int i = (g - gLFO1_WAVE) / kLfoParams, k = (g - gLFO1_WAVE) % kLfoParams, x = g - gLFO1_WAVE;
+            static const char* kn[kLfoParams] = {"Wave", "Rate", "Sync", "Depth", "Destination", "Phase"};
+            std::snprintf(nm[x], sizeof(nm[x]), "LFO %d %s", i + 1, kn[k]); std::snprintf(sy[x], sizeof(sy[x]), "lfo%d_%d", i + 1, k + 1);
+            p.name = nm[x]; p.shortName = nm[x]; p.symbol = sy[x];
+            p.ranges.min = 0; p.ranges.max = k == 4 ? (float)(kLfoDests - 1) : 127.f; p.ranges.def = globalDefault(g);
+            if (k == 4) p.hints |= kParameterIsInteger;
+            return;
+        }
+        case gENV_SENS: p.name = "Envelope Sensitivity"; p.symbol = "env_sens"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = globalDefault(g); return;
+        case gENV_ATTACK: p.name = "Envelope Attack"; p.symbol = "env_attack"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = globalDefault(g); return;
+        case gENV_RELEASE: p.name = "Envelope Release"; p.symbol = "env_release"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = globalDefault(g); return;
+        case gENV_DEPTH: p.name = "Envelope Depth"; p.symbol = "env_depth"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = globalDefault(g); return;
+        case gENV_DEST: p.name = "Envelope Destination"; p.symbol = "env_dest"; p.ranges.min = 0; p.ranges.max = (float)(kLfoDests - 1); p.ranges.def = 0; p.hints |= kParameterIsInteger; return;
         case gOUT_STEP: p.name = "Play Step"; p.symbol = "out_step"; p.hints = kParameterIsOutput | kParameterIsInteger;
             p.ranges.min = -1; p.ranges.max = 32768 * Engine::kFine; p.ranges.def = -1; return;
         case gOUT_ACTIVE: p.name = "Active Lanes"; p.symbol = "out_active"; p.hints = kParameterIsOutput | kParameterIsInteger;
@@ -149,6 +165,8 @@ protected:
                     if (std::sscanf(line.c_str() + 3, "%u %f", &i, &v) == 2) uiEdit(i, v);
                 } else if (line == "lic") {
                     licensed.store(lic::findInstalled(kProductCode).valid);
+                } else if (line.rfind("fill ", 0) == 0) {          // FILL button
+                    uiFill.store(std::atoi(line.c_str() + 5) != 0);
                 } else if (line.rfind("hold ", 0) == 0) {          // on-screen lane pad held (mask)
                     uiHoldMask.store((uint32_t)std::strtoul(line.c_str() + 5, nullptr, 10));
                 } else {
@@ -176,10 +194,10 @@ protected:
             if (lk.owns_lock()) {
                 const uint32_t d = dirty.exchange(0);
                 for (int p = 0; p < kPatterns; ++p) if (d & (1u << p)) engine->bank.patterns[p] = master->patterns[p];
-                if (d & kMuteBit) std::memcpy(engine->bank.mute, master->mute, sizeof(master->mute));
+                if (d & kMuteBit) { std::memcpy(engine->bank.mute, master->mute, sizeof(master->mute)); std::memcpy(engine->bank.always, master->always, sizeof(master->always)); engine->bank.chain = master->chain; std::memcpy(engine->bank.order, master->order, sizeof(master->order)); }
             }
         }
-        // MIDI: C2..G2 (48..55) hold lanes 1-8 on while pressed, C3..D#4 (60..75) choose patterns A01..A16
+        // MIDI: C2..G#2 (48..56) hold lanes 1-9 on while pressed (ONE-SHOT lanes start), A2 = FILL, C3..D#4 (60..75) choose patterns A01..A16
         for (uint32_t i = 0; i < midiCount; ++i) {
             const MidiEvent& ev = midi[i];
             if (ev.size < 3) continue;
@@ -191,9 +209,11 @@ protected:
             } else if (on && note >= 60 && note < 60 + kPatterns) {
                 engine->midiPattern = note - 60;
             }
-            if (st == 0xB0 && (ev.data[1] == 120 || ev.data[1] == 123)) midiHoldMask = 0;
+            if (note == 48 + kLanes) { if (on) midiFill = true; else if (off) midiFill = false; }   // A2 = FILL
+            if (st == 0xB0 && (ev.data[1] == 120 || ev.data[1] == 123)) { midiHoldMask = 0; midiFill = false; }
         }
         engine->midiHold = midiHoldMask | uiHoldMask.load(std::memory_order_relaxed);
+        engine->fill = midiFill || uiFill.load(std::memory_order_relaxed);
         if (engine->midiPattern >= 0 && (int)std::lround(engine->global[gPATTERN]) == engine->midiPattern) engine->midiPattern = -1;
 
         Transport tp;
@@ -211,7 +231,7 @@ protected:
         if (lic::kDemoModeEnabled && !licensed.load(std::memory_order_relaxed)) demoGate(inputs, outputs, frames);
     }
 
-    // Demo mode (no licence): the effect drops out (dry sound) for 3 seconds every 45 seconds.
+    // Demo mode (no licence): the effects drop out (dry sound) for 3 seconds every 45 seconds.
     void demoGate(const float** inputs, float** outputs, uint32_t frames)
     {
         const double sr = getSampleRate();
@@ -233,7 +253,8 @@ private:
     std::atomic<uint32_t> dirty{0};
     std::atomic<bool> licensed{false};
     std::atomic<uint32_t> uiHoldMask{0};
-    uint32_t midiHoldMask = 0;
+    uint32_t midiHoldMask = 0; bool midiFill = false;
+    std::atomic<bool> uiFill{false};
     uint64_t demoPos = 0; float demoGain = 1.f;
     static constexpr const char* kProductCode = "KFX-8";
     String skinState;

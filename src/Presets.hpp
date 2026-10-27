@@ -14,7 +14,9 @@ struct PB {   // preset builder: knobs + pattern 0 (and more)
         b.initDefault();
     }
     void knob(int l, int k, int val) { v[lpIndex(l, k)] = (float)val; }
-    void knobs(int l, std::initializer_list<int> vals) { int k = 0; for (int x : vals) { if (x >= 0) v[lpIndex(l, k)] = (float)x; if (++k >= kLaneParams) break; } }
+    // the six main knobs, then MIX (MODEL is set with model())
+    void knobs(int l, std::initializer_list<int> vals) { int k = 0; for (int x : vals) { const int idx = k < 6 ? k : kKnobs; if (x >= 0) v[lpIndex(l, idx)] = (float)x; if (++k > 6) break; } }
+    void model(int l, int m, int n) { v[lpIndex(l, 6)] = (m + 0.5f) * 128.f / n; }
     void g(int gp, float val) { v[kGlobalBase + gp] = val; }
     // "x" = on, "." = off; the string length = the lane length
     void row(int p, int l, const char* s)
@@ -28,131 +30,114 @@ struct PB {   // preset builder: knobs + pattern 0 (and more)
     }
     void lock(int p, int l, int step, int k, int val) { b.patterns[p].locks[l][step][k] = (uint8_t)clampi(val, 0, 127); }
     void speed(int p, int l, int sp) { b.patterns[p].speed[l] = (uint8_t)sp; }
+    void always(int l) { b.always[l] = 1; }
 };
 
 static void pInit(PB&) {}
-static void pStutterFills(PB& b)
+static void pWarmBus(PB& b)
 {
-    b.knobs(lnStutter, {56, 110, 64, 127, 127});
-    b.row(0, lnStutter, "............xxxx");
-    b.lock(0, lnStutter, 14, 0, 24); b.lock(0, lnStutter, 15, 0, 8);     // 1/32 then 1/64 at the end of the bar
-    b.row(1, lnStutter, "....xx......xxxx");
-    b.lock(1, lnStutter, 4, 0, 88);
-}
-static void pTapeStops(PB& b)
-{
-    b.knobs(lnTape, {70, 64, 90, 10, 127});
-    b.row(0, lnTape, "..............................xx");   // 32 steps: the last 2 of every 2 bars
-    b.knob(lnFilter, 0, 127);
-}
-static void pReverseSwells(PB& b)
-{
-    b.knobs(lnReverse, {56, 64, 60, 110, 127});
-    b.row(0, lnReverse, "....xxxx........");
-    b.knobs(lnDelay, {72, 70, 70, 100, 70});
-    b.row(0, lnDelay, ".......x........");
-}
-static void pFilterRise(PB& b)
-{
-    b.knobs(lnFilter, {30, 70, 0, 64, 127});
-    b.row(0, lnFilter, "xxxxxxxxxxxxxxxx");
-    for (int s = 0; s < 16; ++s) b.lock(0, lnFilter, s, 0, 30 + s * 6);
-}
-static void pTranceGate(PB& b)
-{
-    b.knobs(lnGate, {32, 64, 16, 127, 127});
-    b.row(0, lnGate, "xxxxxxxxxxxxxxxx");
-    b.lock(0, lnGate, 12, 0, 72); b.lock(0, lnGate, 13, 0, 72); b.lock(0, lnGate, 14, 0, 104); b.lock(0, lnGate, 15, 0, 104);
-}
-static void pCrushAccents(PB& b)
-{
-    b.knobs(lnCrush, {80, 70, 40, 100, 110});
-    b.row(0, lnCrush, "..x...x...x...xx");
-    b.lock(0, lnCrush, 15, 1, 120);
+    b.always(lnDrive); b.knobs(lnDrive, {34, 0, 100, 10, 64, 60, 110});
+    b.always(lnComp);  b.knobs(lnComp, {80, 40, 40, 50, 20, 60, 127});
+    b.always(lnReverb); b.knobs(lnReverb, {50, 10, 70, 40, 30, 110, 28});
 }
 static void pDubThrows(PB& b)
 {
-    b.knobs(lnDelay, {104, 90, 50, 110, 100});      // 1/8D, long feedback, dark, ping-pong
-    b.row(0, lnDelay, "...x.......x....");
-    b.knobs(lnFilter, {75, 50, 2, 64, 127});         // high pass on the throws' bar end
-    b.row(0, lnFilter, "..............xx");
+    b.knobs(lnDelay, {104, 90, 60, 110, 30, 20, 110});           // 1/8 dotted, long feedback, dark
+    b.model(lnDelay, 1, kDelayModels);                           // tape
+    b.row(0, lnDelay, "...x.......x...x");
+    b.knobs(lnReverb, {90, 40, 60, 60, 40, 127, 80});
+    b.row(0, lnReverb, "....x.......x...");
+    b.always(lnFilter); b.knobs(lnFilter, {6, 30, 64, 64, 64, 0, 127});   // a gentle high pass (TYPE locked below)
+    b.knob(lnFilter, 2, 70);
 }
-static void pPitchRisers(PB& b)
+static void pFilterRise(PB& b)
 {
-    b.knobs(lnPitch, {88, 64, 60, 30, 110});
-    b.row(0, lnPitch, "........xx....xx");
-    b.lock(0, lnPitch, 8, 0, 85); b.lock(0, lnPitch, 9, 0, 85);       // +7
-    b.lock(0, lnPitch, 14, 0, 96); b.lock(0, lnPitch, 15, 0, 96);     // +12
+    b.knobs(lnFilter, {30, 70, 0, 64, 64, 10, 127});
+    b.row(0, lnFilter, "xxxxxxxxxxxxxxxx");
+    for (int s = 0; s < 16; ++s) b.lock(0, lnFilter, s, 0, 30 + s * 6);
 }
-static void pGlitchMachine(PB& b)
+static void pLofi(PB& b)
 {
-    b.knobs(lnStutter, {24, 100, 70, 90, 127});
-    b.row(0, lnStutter, "....x..");              // 7 steps
-    b.knobs(lnReverse, {24, 80, 20, 127, 127});
-    b.row(0, lnReverse, "..x..");                // 5
-    b.knobs(lnCrush, {90, 90, 30, 90, 100});
-    b.row(0, lnCrush, "x.........x");            // 11
-    b.knobs(lnGate, {72, 50, 10, 127, 127});
-    b.row(0, lnGate, ".....xx.x");               // 9
-    b.knobs(lnDelay, {72, 60, 80, 127, 60});
-    b.row(0, lnDelay, "..........x...");         // 14
+    b.always(lnCrush); b.knobs(lnCrush, {76, 34, 20, 30, 70, 70, 127});
+    b.always(lnFilter); b.knobs(lnFilter, {92, 40, 0, 64, 64, 20, 127});
+    b.always(lnChorus); b.knobs(lnChorus, {20, 50, 60, 0, 60, 80, 50});
+}
+static void pJetFlanger(PB& b)
+{
+    b.always(lnFlanger); b.knobs(lnFlanger, {30, 60, 100, 30, 115, 90, 127});   // one sweep per bar
+}
+static void pChorusWash(PB& b)
+{
+    b.always(lnChorus); b.knobs(lnChorus, {36, 80, 70, 127, 127, 100, 70});
+    b.always(lnReverb); b.knobs(lnReverb, {100, 60, 75, 50, 60, 127, 60}); b.model(lnReverb, 4, kReverbModels);  // shimmer
+}
+static void pPump(PB& b)
+{
+    b.always(lnComp); b.knobs(lnComp, {50, 110, 10, 30, 70, 30, 127});
+    b.always(lnDrive); b.knobs(lnDrive, {50, 0, 90, 30, 64, 56, 127});
+}
+static void pCrushAccents(PB& b)
+{
+    b.knobs(lnCrush, {90, 70, 30, 60, 90, 64, 127});
+    b.row(0, lnCrush, "..x...x...x...xx");
+    b.lock(0, lnCrush, 15, 0, 120); b.lock(0, lnCrush, 15, 1, 110);
+}
+static void pDriveStabs(PB& b)
+{
+    b.knobs(lnDrive, {100, 64, 80, 40, 64, 56, 127});            // folded
+    b.row(0, lnDrive, "....x.......x...");
+    b.lock(0, lnDrive, 12, 1, 100);                              // tube on the second one
+    b.knobs(lnReverb, {60, 20, 70, 50, 30, 127, 60}); b.model(lnReverb, 1, kReverbModels);    // plate
+    b.row(0, lnReverb, "....x.......x...");
+}
+static void pSpaceEcho(PB& b)
+{
+    b.always(lnDelay); b.knobs(lnDelay, {104, 100, 50, 80, 70, 40, 70}); b.model(lnDelay, 2, kDelayModels);   // BBD
+    b.always(lnReverb); b.knobs(lnReverb, {85, 30, 60, 50, 50, 127, 45}); b.model(lnReverb, 3, kReverbModels);   // spring
 }
 static void pBreakdown(PB& b)
 {
-    b.knobs(lnFilter, {100, 80, 0, 40, 127});
-    b.row(0, lnFilter, "xxxxxxxxxxxxxxxx");
-    for (int s = 0; s < 16; ++s) b.lock(0, lnFilter, s, 0, 100 - s * 4);
-    b.knobs(lnDelay, {88, 80, 60, 90, 90});
-    b.row(0, lnDelay, "...x...x...x..xx");
-    b.knobs(lnGate, {72, 64, 30, 127, 127});
-    b.row(0, lnGate, "............xxxx");
-}
-static void pLofiBus(PB& b)
-{
-    b.knobs(lnCrush, {60, 36, 20, 80, 60});
-    b.row(0, lnCrush, "xxxxxxxxxxxxxxxx");
-    b.knobs(lnFilter, {95, 30, 0, 64, 127});
-    b.row(0, lnFilter, "xxxxxxxxxxxxxxxx");
-    b.knobs(lnTape, {40, 40, 80, 60, 127});
-    b.row(0, lnTape, "..............................xx");
-}
-static void pHalfTime(PB& b)
-{
-    b.knobs(lnStutter, {88, 127, 64, 127, 127});      // 1/8 repeats = half-time feel
-    b.row(0, lnStutter, "xxxx....xxxx....");
-    b.lock(0, lnStutter, 4, 0, 100);
-    b.knobs(lnReverse, {60, 64, 40, 100, 127});
-    b.row(0, lnReverse, "...............x");
+    b.knobs(lnFilter, {90, 80, 0, 64, 64, 0, 127});
+    b.row(0, lnFilter, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+    for (int s = 0; s < 32; ++s) b.lock(0, lnFilter, s, 0, 110 - s * 3);
+    b.knobs(lnDelay, {72, 80, 70, 100, 20, 0, 100});
+    b.row(0, lnDelay, "..............................xx");
+    b.knobs(lnReverb, {110, 50, 70, 40, 40, 127, 90}); b.model(lnReverb, 2, kReverbModels);   // hall
+    b.row(0, lnReverb, "...............................x");
+    b.b.patterns[0].length = 32;
 }
 static void pPolyFx(PB& b)
 {
-    b.knobs(lnFilter, {60, 90, 1, 64, 110});
-    b.row(0, lnFilter, "x..x..x..x..x");          // 13
-    b.knobs(lnGate, {40, 40, 20, 127, 127});
-    b.row(0, lnGate, "..x..x..x..x..x");          // 15
-    b.knobs(lnPitch, {76, 64, 50, 0, 90});
-    b.row(0, lnPitch, "....x...x...");            // 12
-    b.speed(0, lnPitch, 3);                         // 1/2x
-    b.knobs(lnDelay, {72, 60, 70, 127, 70});
-    b.row(0, lnDelay, "......x..");               // 9
+    b.knobs(lnFilter, {60, 90, 32, 64, 64, 0, 127});  b.row(0, lnFilter, "x..x.x...x.x.");
+    b.knobs(lnFlanger, {60, 0, 90, 30, 100, 70, 127}); b.row(0, lnFlanger, "x......x.......");
+    b.knobs(lnDelay, {72, 60, 70, 100, 0, 0, 90});     b.row(0, lnDelay, "...x.....x..");
+    b.knobs(lnCrush, {90, 60, 0, 40, 100, 64, 127});   b.row(0, lnCrush, "..x...x..");
+}
+static void pWobble(PB& b)
+{
+    b.knobs(lnFilter, {40, 100, 0, 64, 64, 40, 127});
+    b.row(0, lnFilter, "xxxxxxxxxxxxxxxx");
+    static const int c[16] = {30, 80, 30, 80, 40, 100, 40, 100, 30, 80, 30, 80, 50, 110, 70, 120};
+    for (int s = 0; s < 16; ++s) b.lock(0, lnFilter, s, 0, c[s]);
+    b.always(lnDrive); b.knobs(lnDrive, {60, 0, 80, 20, 70, 56, 127});
 }
 
 struct PresetDef { const char* name; const char* desc; void (*build)(PB&); };
 static const PresetDef kPresets[] = {
-    {"Init",            "Every knob at its base, no step lit",                      pInit},
-    {"Stutter Fills",   "Repeats at the end of the bar, getting faster",             pStutterFills},
-    {"Tape Stops",      "The tape slows to a stop at the end of every 2 bars", pTapeStops},
-    {"Reverse Swells",  "The second beat backwards, one echo throw",                 pReverseSwells},
-    {"Filter Rise",     "Low pass opening across the bar",                           pFilterRise},
-    {"Trance Gate",     "16th chop, faster at the end of the bar",                    pTranceGate},
-    {"Crush Accents",   "Bit-crushed offbeats",                                      pCrushAccents},
-    {"Dub Throws",      "Dotted-eighth echo throws, high pass at the bar end",       pDubThrows},
-    {"Pitch Risers",    "Fifth then octave up with a short spiral",                  pPitchRisers},
-    {"Glitch Machine",  "Five effects on lanes of 7, 5, 11, 9 and 14 steps",          pGlitchMachine},
-    {"Breakdown",       "Closing filter, echoes and a gated end",                    pBreakdown},
-    {"Lo-Fi Bus",       "Crushed and dark all the time, a tape stop every 2 bars",   pLofiBus},
-    {"Half Time",       "Eighth-note repeats every other beat, a reverse lead-in",   pHalfTime},
-    {"Poly FX",         "Filter, gate, pitch and echo on 13, 15, 12 and 9 steps",    pPolyFx},
+    {"Init",            "Every knob at its base, every effect in step mode, no step lit", pInit},
+    {"Warm Bus",        "Drive, gentle compression and a little room, all the time",      pWarmBus},
+    {"Dub Throws",      "Dotted echo and reverb throws, a light high pass",               pDubThrows},
+    {"Filter Rise",     "Low pass opening across the bar",                                pFilterRise},
+    {"Lo-Fi",           "Crushed, dark and slightly detuned all the time",                pLofi},
+    {"Jet Flanger",     "A slow flanger sweep, one per bar",                              pJetFlanger},
+    {"Chorus Wash",     "Wide four-voice chorus into a long reverb",                      pChorusWash},
+    {"Pump",            "Hard compression with a fast release, driven",                   pPump},
+    {"Crush Accents",   "Bit-crushed offbeats",                                           pCrushAccents},
+    {"Drive Stabs",     "Folded and tube drive on the backbeats, with reverb",            pDriveStabs},
+    {"Space Echo",      "Wobbly feedback echo into a reverb, all the time",               pSpaceEcho},
+    {"Breakdown",       "Closing filter over two bars, echo and reverb at the end",       pBreakdown},
+    {"Poly FX",         "Filter, flanger, echo and crush on 13, 15, 12 and 9 steps",      pPolyFx},
+    {"Wobble Filter",   "Resonant filter locked step by step over a driven bus",          pWobble},
 };
 static constexpr int kNumPresets = (int)(sizeof(kPresets) / sizeof(kPresets[0]));
 

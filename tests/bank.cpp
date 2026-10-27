@@ -34,15 +34,28 @@ int main()
     check(a->patterns[9].laneEmpty(2), "clear lane");
     check(applyCommand(*a, "s 99 0 0 1") < 0 && applyCommand(*a, "k 0 9 0 0 1") < 0 && applyCommand(*a, "zz") < 0, "out-of-range / unknown commands refused");
     check(!deserializeBank(*b, "KNTK4\n"), "another product's bank refused");
+    applyCommand(*a, "A 5 1"); applyCommand(*a, "C 1 3 2:4 0:1 9:2");
+    check(deserializeBank(*b, serializeBank(*a).c_str()) && b->always[5] == 1 && b->chain.on && b->chain.n == 3 && b->chain.pat[2] == 9 && b->chain.rep[0] == 4, "ALWAYS mode and CHAIN survive");
+    applyCommand(*a, "C 1 2 99:1 3:0");
+    check(a->chain.n == 1 && a->chain.pat[0] == 3 && a->chain.rep[0] == 1, "CHAIN: bad patterns skipped, repeats at least 1");
+    applyCommand(*a, "C 1 0"); check(!a->chain.on, "an empty chain is off");
+    applyCommand(*a, "s 4 1 3 1"); applyCommand(*a, "t 4 1 4 1"); applyCommand(*a, "t 4 1 5 1");
+    check(deserializeBank(*b, serializeBank(*a).c_str()) && b->patterns[4].tie[1][4] && b->patterns[4].tie[1][5] && !b->patterns[4].tie[1][3], "ties survive");
+    int back = 0; const int st = a->patterns[4].runStart(1, 5, back);
+    check(st == 3 && back == 2 && a->patterns[4].runLength(1, 3) == 3, "tied run: start and length");
+    applyCommand(*a, "rot 4 1 1"); check(a->patterns[4].tie[1][6] && a->patterns[4].on[1][4], "ties follow rotation");
+    applyCommand(*a, "c 4 2 5 6"); applyCommand(*a, "O 8 0 1 2 3 4 5 6 7"); applyCommand(*a, "A 3 2");
+    check(deserializeBank(*b, serializeBank(*a).c_str()) && b->patterns[4].cond[2][5] == 6 && b->order[0] == 8 && b->order[8] == 7 && b->always[3] == 2, "conditions, order and one-shot mode survive");
+    check(applyCommand(*a, "O 1 1 2 3 4 5 6 7 8") == -1, "an order that is not a permutation is refused");
     // presets
     bool ok = true;
     for (int i = 0; i < kNumPresets; ++i) {
         std::vector<float> v(kTotalParams); std::unique_ptr<Bank> pb(new Bank());
         buildPreset(i, v.data(), *pb);
         bool any = false;
-        for (int l = 0; l < kLanes; ++l) any = any || !pb->patterns[0].laneEmpty(l);
+        for (int l = 0; l < kLanes; ++l) any = any || !pb->patterns[0].laneEmpty(l) || pb->always[l];
         for (int x = 0; x < kGlobalBase + gOUT_STEP; ++x) if (!(v[x] >= 0.f && v[x] <= 240.f)) ok = false;
-        if (i > 0 && !any) { std::printf("     %s has no lit step\n", kPresets[i].name); ok = false; }
+        if (i > 0 && !any) { std::printf("     %s has no lit step and no ALWAYS effect\n", kPresets[i].name); ok = false; }
         std::unique_ptr<Bank> rb(new Bank());
         if (!deserializeBank(*rb, serializeBank(*pb).c_str()) || serializeBank(*rb) != serializeBank(*pb)) ok = false;
     }
