@@ -251,6 +251,17 @@ int main()
         run([](Engine& e) { e.global[gPLAY] = 0.f; e.midiHold = 1u << lnCrush; }, oL, oR);
         check(diff(oL, inL, 4800, frames) > 0.05, "MIDI-held lane works with the transport stopped");
     }
+    {   // 0.4: FILTER LFO (synced, square 1/4): with depth the filter differs between the two halves of a beat
+        std::vector<float> a, b, c, d;
+        auto set = [](Engine& e) { e.bank.always[lnFilter] = lmAlways; e.laneParam[lnFilter][0] = 70; e.laneParam[lnFilter][1] = 30; };
+        run([&](Engine& e) { set(e); }, a, b);
+        run([&](Engine& e) { set(e); e.laneParam[lnFilter][6] = 127; e.global[gFLFO_WAVE] = 2; e.global[gFLFO_RATE] = 4; }, c, d);
+        const int q = (int)(sr / 2);      // one beat
+        check(diff(c, a, 2000, q / 2 - 500) > 0.1 && diff(c, a, q / 2 + 2000, q - 500) > 0.1, "FILTER LFO moves the cutoff (up, then down)");
+        Bank o; deserializeBank(o, "KFX82\n"); Bank n; n.initDefault();
+        check(o.order[3] == lnComp && n.order[kLanes - 1] == lnComp, "COMP last by default; 0.3 banks keep their order");
+        Bank r; deserializeBank(r, serializeBank(n).c_str()); check(r.order[kLanes - 1] == lnComp, "the new default order survives a round trip");
+    }
     std::printf(fails ? "%d failures\n" : "all passed\n", fails);
     return fails ? 1 : 0;
 }

@@ -47,3 +47,12 @@ View file `KinetikKFX8-view.txt` ("skin zoom").
   { 2, 2 }` so AU also offers plain stereo; `ioChanged` stores the input count, `Engine::scL / scR` = nullptr when there is
   none. COMP knob 6 = SOURCE (`sideSource`, >= 64 = side-chain; nothing connected = no gain reduction), global `gENV_SRC`
   (added before the outputs), output `gOUT_SC` (side-chain peak, `drawScMeter` in the COMP and ENV LCDs).
+
+## Added in 0.4.0
+
+- Lanes are drawn in processing order: `rowOf(l)` (= `bank->position(l)`, or the preview while a lane is dragged: `dkLaneMove`,
+  `laneMoved`, `moveTarget`), `rowY(l)` uses it; drop sends `O ...`. Beat numbers under the last listed row.
+- `kDefaultOrder` puts COMP last; bank header `KFX83`; older banks (no O line) get `kDefaultOrder03`.
+- FILTER knob 6 = LFO (depth); globals `gFLFO_RATE gFLFO_WAVE` (appended before the outputs; `kFltLfoBeats`, `fltLfoShape`,
+  synced to the song position); `FxCtx::fltLfo`, `Engine::fltLfoNow`. UI: in the FILTER editor the EARLIER / LATER row shows
+  the LFO RATE / WAVE buttons; the filter graphic shows its reach. Red UNDO.

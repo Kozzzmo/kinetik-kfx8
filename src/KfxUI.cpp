@@ -34,7 +34,7 @@ struct R {
     float cy() const { return y + h * 0.5f; }
 };
 
-enum DragKind { dkNone, dkKnob, dkGlobal, dkTempo, dkPatLen, dkSwing, dkLaneLen, dkPaint, dkPaintTie, dkHold, dkLfo, dkFill, dkResize };
+enum DragKind { dkNone, dkKnob, dkGlobal, dkTempo, dkPatLen, dkSwing, dkLaneLen, dkPaint, dkPaintTie, dkHold, dkLfo, dkFill, dkResize, dkLaneMove };
 enum Overlay { ovNone, ovPresets, ovSkins, ovSave, ovLicense, ovUpdate, ovChain, ovDest };
 
 class KfxUI : public UI
@@ -203,7 +203,24 @@ protected:
     R clearLaneBtn() const { return {662.f, 66.f, 62.f, 26.f}; }
     R copyLaneBtn() const { return {728.f, 66.f, 60.f, 26.f}; }
     R pasteLaneBtn() const { return {792.f, 66.f, 60.f, 26.f}; }
-    float rowY(int l) const { return 100.f + l * 41.f; }
+    // lanes are listed in their processing order (0.4); while a lane is dragged the list shows where it would land
+    int rowOf(int l) const
+    {
+        if (drag == dkLaneMove && laneMoved) {
+            int r = 0;
+            if (l == dragIndex) return moveTarget;
+            for (int i = 0; i < kLanes; ++i) {
+                const int ln = bank->order[i];
+                if (ln == dragIndex) continue;
+                if (r == moveTarget) ++r;
+                if (ln == l) return r;
+                ++r;
+            }
+        }
+        return bank->position(l);
+    }
+    float rowY(int l) const { return 100.f + rowOf(l) * 41.f; }
+    int laneMoved = 0, moveTarget = 0; float moveGrab = 0.f;
     R laneBtn(int l) const { return {24.f, rowY(l), 96.f, 38.f}; }
     R modeBtn(int l) const { return {122.f, rowY(l), 46.f, 18.f}; }
     R bypassBtn(int l) const { return {122.f, rowY(l) + 20.f, 46.f, 18.f}; }
@@ -478,6 +495,7 @@ protected:
             const R lb = laneBtn(l);
             const Color fg = sel ? th->selText : (byp ? th->faint : th->text);
             if (sel) box(lb, th->selFill); else { box(lb, th->btnFill); frame(lb, th->btnEdge); }
+            if (drag == dkLaneMove && laneMoved && l == dragIndex) frame({lb.x - 3, lb.y - 3, 846.f - 24.f + 2.f, lb.h + 6}, accentInk(), 4.f, 2.f);   // the lane being moved
             label(lb.x + 9, lb.y + 15, kLaneNames[l], 10.5f, fg, ALIGN_LEFT | ALIGN_MIDDLE);
             std::snprintf(b, sizeof(b), "%d  %s", p.len[l], kSpeedNames[p.speed[l] % kSpeeds]);
             label(lb.x + 9, lb.y + 32, b, 9.f, sel ? th->selText : th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
@@ -531,7 +549,8 @@ protected:
         }
         // beat numbers under the grid
         for (int i = 0; i < 16; ++i) {
-            const R r = stepCell(kLanes - 1, i);
+            int last = 0; for (int l = 0; l < kLanes; ++l) if (rowOf(l) == kLanes - 1) last = l;
+            const R r = stepCell(last, i);                          // the last row of the list
             std::snprintf(b, sizeof(b), "%d", stepPg * 16 + i + 1);
             label(r.cx(), r.y + r.h + 11, b, 8.5f, i % 4 == 0 ? th->dim : th->faint);
         }
@@ -567,7 +586,8 @@ protected:
         button(rndAllBtn(), "RANDOM ALL", false, 10.f);
         button(fillPerfBtn(), "FILL (HOLD)", drag == dkFill, 10.f);
         const bool can = !undoStack.empty();
-        if (can) button(undoBtn(), "UNDO", false, 10.5f);
+        // UNDO in red, as the other Kinetik plug-ins
+        if (can) { box(undoBtn(), th->btnFill); frame(undoBtn(), th->lock, -1.f, 1.5f); label(undoBtn().cx(), undoBtn().cy() + 1, "UNDO", 10.5f, th->lock, ALIGN_CENTER | ALIGN_MIDDLE, th->fontButton); }
         else { box(undoBtn(), th->btnFill); frame(undoBtn(), Color(th->btnEdge, th->bg, 0.5f)); label(undoBtn().cx(), undoBtn().cy() + 1, "UNDO", 10.5f, th->faint); }
     }
 
@@ -619,7 +639,12 @@ protected:
                 button(condBtn(), (std::string("CONDITION: ") + kCondNames[c]).c_str(), c != 0, 9.5f);
             } else {
                 const int pos = bank->position(l);
-                button(orderUp(), "< EARLIER", false, 9.f); button(orderDn(), "LATER >", false, 9.f);
+                if (l == lnFilter) {        // the FILTER LFO: rate and wave (its depth = the LFO knob)
+                    char rb[32];
+                    std::snprintf(rb, sizeof(rb), "LFO %s", kFltLfoRateNames[clampi((int)gp(gFLFO_RATE), 0, kFltLfoRates - 1)]);
+                    button(orderUp(), rb, false, 9.f);
+                    button(orderDn(), kFltLfoWaveNames[clampi((int)gp(gFLFO_WAVE), 0, kFltLfoWaves - 1)], false, 9.f);
+                } else { button(orderUp(), "< EARLIER", false, 9.f); button(orderDn(), "LATER >", false, 9.f); }
                 char ob[16]; std::snprintf(ob, sizeof(ob), "%d / %d", pos + 1, kLanes);
                 label(lc.x + lc.w - 14, lc.y + 22, ob, 9.f, th->lcdDim, ALIGN_RIGHT | ALIGN_MIDDLE);
             }
@@ -769,7 +794,16 @@ protected:
         }
         case lnFilter: {
             const int type = bin4(p[2]);
-            const float fc = p[0] / 127.f, q = resoQ(p[1], 0.6f, 18.f);
+            float fc = p[0] / 127.f; const float q = resoQ(p[1], 0.6f, 18.f);
+            if (p[6] > 0.5f) {              // LFO: its reach as a band, the curve follows it while playing
+                const float reach = p[6] / 127.f * 4.f / std::log2(1000.f);
+                beginPath(); rect(g.x + g.w * clampf(fc - reach, 0.f, 1.f), g.y, g.w * (clampf(fc + reach, 0.f, 1.f) - clampf(fc - reach, 0.f, 1.f)), g.h);
+                fillColor(withAlpha(accentInk(), 0.12f)); fill();
+                if (gp(gOUT_STEP) >= 0.f) {
+                    const double beat = gp(gOUT_STEP) / (double)kFineSteps * 0.25;
+                    fc = clampf(fc + reach * fltLfoShape(clampi((int)gp(gFLFO_WAVE), 0, kFltLfoWaves - 1), beat / kFltLfoBeats[clampi((int)gp(gFLFO_RATE), 0, kFltLfoRates - 1)]), 0.f, 1.f);
+                }
+            }
             curve([&](float x) {
                 const float d = (x - fc) * 6.f; float m;
                 if (type == 0) m = 1.f / std::sqrt(1.f + std::pow(std::exp(d), 4.f));
@@ -1192,7 +1226,7 @@ protected:
     std::string tipAt(float x, float y)
     {
         for (int l = 0; l < kLanes; ++l) {
-            if (laneBtn(l).in(x, y)) return std::string(kLaneNames[l]) + ": " + kLaneDefs[l].help + ". Click to edit its knobs; the number is its length and speed.";
+            if (laneBtn(l).in(x, y)) return std::string(kLaneNames[l]) + ": " + kLaneDefs[l].help + ". Click to edit its knobs; drag up / down to move it in the chain (top = first). The number is its length and speed.";
             if (modeBtn(l).in(x, y)) return "STEPS: on during the lit steps. ALWAYS: on all the time, lit steps only bring their locks. 1-SHOT: a MIDI note (C2 up) or SHOT plays the lane once.";
             if (bypassBtn(l).in(x, y)) return "ON / OFF: switch the whole lane off (bypass) without losing its steps.";
             if (holdBtn(l).in(x, y)) return "PUSH: the effect plays while you hold the mouse button (MIDI notes C2 to G2 do the same for lanes 1 to 8).";
@@ -1203,7 +1237,9 @@ protected:
         if (chainBtn().in(x, y)) return "CHAIN: play a list of patterns in a loop, each a number of times.";
         for (int i = 0; i < kMods; ++i) if (lfoTab(i).in(x, y)) return i < kLfos ? "LFO " + std::to_string(i + 1) + ": a modulation source for any knob of any effect (* = in use)." : std::string("ENV: the level of the incoming sound moves a knob (envelope follower).");
         if (fillPerfBtn().in(x, y)) return "FILL: while held, steps with the FILL condition play (and NOT FILL steps do not). MIDI A2 does the same.";
-        if (orderUp().in(x, y) || orderDn().in(x, y)) return "Move this effect earlier or later in the chain (the number on each lane = its place).";
+        if (selLane == lnFilter && edLfo < 0 && orderUp().in(x, y)) return "FILTER LFO rate, in tempo (click = next, right-click = previous). Its depth is the LFO knob (lockable per step).";
+        if (selLane == lnFilter && edLfo < 0 && orderDn().in(x, y)) return "FILTER LFO wave (click = next, right-click = previous).";
+        if (orderUp().in(x, y) || orderDn().in(x, y)) return "Move this effect earlier or later in the chain. Or drag its name up / down in the list: the lanes are listed in the order they process the sound.";
         if (laneTab().in(x, y)) return "Back to the knobs of the selected effect.";
         if (edLfo >= 0) for (int k = 0; k < kLfoParams; ++k) if (knobR(k).in(x, y)) {
             static const char* t[kLfoParams] = {"Wave: sine, triangle, saw up, saw down, square, random.", "Speed when SYNC is FREE.", "Tempo-locked speed (FREE = use RATE).",
@@ -1377,6 +1413,14 @@ protected:
             if (drag == dkHold) setHold(0);
             if (drag == dkLfo) editParameter(kGlobalBase + modParam(edLfo, dragIndex), false);
             if (drag == dkFill) setState("cmd", "fill 0");
+            if (drag == dkLaneMove && laneMoved && moveTarget != bank->position(dragIndex)) {   // drop: the lane takes its new place
+                uint8_t o[kLanes]; int r = 0;
+                for (int i = 0; i < kLanes; ++i) { const int ln = bank->order[i]; if (ln == dragIndex) continue; if (r == moveTarget) o[r++] = (uint8_t)dragIndex; o[r++] = (uint8_t)ln; }
+                if (r == moveTarget) o[r++] = (uint8_t)dragIndex;
+                std::string c = "O"; for (int i = 0; i < kLanes; ++i) c += " " + std::to_string(o[i]);
+                laneMoved = 0; sendCmd(c);
+            }
+            laneMoved = 0;
             if (drag == dkResize) saveView();
             if (drag != dkNone) { drag = dkNone; repaint(); }
             return true;
@@ -1411,7 +1455,7 @@ protected:
 
         // lanes
         for (int l = 0; l < kLanes; ++l) {
-            if (laneBtn(l).in(x, y)) { selLane = l; if (lockLane != l) lockStep = -1; repaint(); return true; }
+            if (laneBtn(l).in(x, y)) { selLane = l; if (lockLane != l) lockStep = -1; drag = dkLaneMove; dragIndex = l; laneMoved = 0; moveGrab = y; moveTarget = bank->position(l); repaint(); return true; }
             if (modeBtn(l).in(x, y)) { char b[24]; std::snprintf(b, sizeof(b), "A %d %d", l, (bank->always[l] + (right ? 2 : 1)) % 3); sendCmd(b); repaint(); return true; }
             if (holdBtn(l).in(x, y) && bank->always[l] == lmAlways) return true;
             if (bypassBtn(l).in(x, y)) { char b[24]; std::snprintf(b, sizeof(b), "U %d %d", l, bank->mute[l] ? 0 : 1); sendCmd(b); repaint(); return true; }
@@ -1444,6 +1488,13 @@ protected:
         if (edLfo < 0 && lockMode() && lockLane == selLane && condBtn().in(x, y)) {
             const int c = (pat().cond[selLane][lockStep] + (right ? kConds - 1 : 1)) % kConds;
             char b[48]; std::snprintf(b, sizeof(b), "c %d %d %d %d", editPattern(), selLane, lockStep, c); sendCmd(b); repaint(); return true;
+        }
+        if (edLfo < 0 && selLane == lnFilter && !(lockMode() && lockLane == selLane) && (orderUp().in(x, y) || orderDn().in(x, y))) {
+            const bool rate = orderUp().in(x, y);
+            const int g = rate ? gFLFO_RATE : gFLFO_WAVE, n = rate ? kFltLfoRates : kFltLfoWaves;
+            setParamGesture(kGlobalBase + g, (float)((clampi((int)gp(g), 0, n - 1) + (right ? n - 1 : 1)) % n));
+            if (values[lpIndex(lnFilter, 6)] < 0.5f) setParamGesture(lpIndex(lnFilter, 6), 48.f);   // some depth
+            repaint(); return true;
         }
         if (edLfo < 0 && !(lockMode() && lockLane == selLane) && (orderUp().in(x, y) || orderDn().in(x, y))) {
             const int pos = bank->position(selLane), np = pos + (orderUp().in(x, y) ? -1 : 1);
@@ -1544,6 +1595,11 @@ protected:
         case dkTempo: setParam(kGlobalBase + gTEMPO, clampf(std::round((dragStart + (dragY - y) * ((ev.mod & kModifierShift) ? 0.05f : 0.5f)) * 10.f) / 10.f, 40.f, 240.f)); repaint(); break;
         case dkPatLen: pat().length = (uint8_t)clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 1, kSteps); repaint(); break;
         case dkSwing: pat().swing = (uint8_t)clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 50, 80); repaint(); break;
+        case dkLaneMove: {
+            if (!laneMoved && std::fabs(y - moveGrab) > 6.f) laneMoved = 1;
+            if (laneMoved) { const int t = clampi((int)std::floor((y - 100.f) / 41.f), 0, kLanes - 1); if (t != moveTarget) { moveTarget = t; } repaint(); }
+            break;
+        }
         case dkLaneLen: pat().len[selLane] = (uint8_t)clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 1, kSteps); repaint(); break;
         case dkPaint: case dkPaintTie: {
             const int l = dragIndex;

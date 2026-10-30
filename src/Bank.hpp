@@ -91,7 +91,7 @@ static constexpr int kMuteTouched = 1000;   // applyCommand: lane mutes / modes 
 
 inline std::string serializeBank(const Bank& b)
 {
-    std::string s = "KFX82\n";
+    std::string s = "KFX83\n";
     char buf[160];
     for (int l = 0; l < kLanes; ++l) if (b.mute[l]) { std::snprintf(buf, sizeof(buf), "U %d 1\n", l); s += buf; }
     for (int l = 0; l < kLanes; ++l) if (b.always[l]) { std::snprintf(buf, sizeof(buf), "A %d %d\n", l, b.always[l]); s += buf; }
@@ -192,6 +192,8 @@ inline bool deserializeBank(Bank& b, const char* text)
 {
     if (!text || std::strncmp(text, "KFX8", 4) != 0) return false;   // KFX81 = 0.1 (other effects: its locks are kept as they are)
     b.initDefault();
+    if (std::strncmp(text, "KFX83", 5) != 0)          // before 0.4 the compressor came 4th by default: those banks keep it
+        for (int i = 0; i < kLanes; ++i) b.order[i] = (uint8_t)kDefaultOrder03[i];
     const char* s = text;
     std::string line;
     while (*s) {

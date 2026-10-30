@@ -12,6 +12,7 @@ struct FxCtx {
     double spb = 24000.0;       // samples per quarter note
     double beat = 0.0;          // song position (quarter notes) at the segment start
     float stepPhase = 0.f;      // 0..1: progress inside the lane's current step (filter SWEEP)
+    float fltLfo = 0.f;         // FILTER LFO now (-1..1), scaled by the FILTER knob LFO
 };
 
 // fractional read from a ring buffer
@@ -95,7 +96,8 @@ struct Filter {
         const float sweepOct = (p[3] - 64.f) / 64.f * 4.f * c.stepPhase;
         envAmt = (p[4] - 64.f) / 64.f * 4.f;
         const float envOct = envAmt * clampf(env * 3.f, 0.f, 1.f);
-        const float hz = hzExp(p[0], 20.f, 20000.f) * std::pow(2.f, sweepOct + envOct);
+        const float lfoOct = p[6] / 127.f * 4.f * c.fltLfo;      // LFO: up to +/- 4 octaves
+        const float hz = hzExp(p[0], 20.f, 20000.f) * std::pow(2.f, sweepOct + envOct + lfoOct);
         const float q = resoQ(p[1], 0.6f, 18.f);
         fl.setup(hz, q, c.sr); fr.setup(hz, q, c.sr);
         drive = p[5] / 127.f;

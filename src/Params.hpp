@@ -19,13 +19,15 @@ static constexpr int kChainMax = 16;      // entries of the pattern chain
 // processing order: tone shaping first, then dynamics, modulation, and the tails last
 enum Lane { lnDrive, lnCrush, lnFilter, lnComp, lnChorus, lnFlanger, lnDelay, lnReverb, lnPerform };
 static const char* const kLaneNames[kLanes] = {"DRIVE", "CRUSH", "FILTER", "COMP", "CHORUS", "FLANGER", "DELAY", "REVERB", "PERFORM"};
-static const int kDefaultOrder[kLanes] = {lnDrive, lnCrush, lnFilter, lnComp, lnChorus, lnFlanger, lnPerform, lnDelay, lnReverb};
+// 0.4: the compressor comes last (owner's request); banks saved before (KFX82 and older) keep the old default
+static const int kDefaultOrder[kLanes] = {lnDrive, lnCrush, lnFilter, lnChorus, lnFlanger, lnPerform, lnDelay, lnReverb, lnComp};
+static const int kDefaultOrder03[kLanes] = {lnDrive, lnCrush, lnFilter, lnComp, lnChorus, lnFlanger, lnPerform, lnDelay, lnReverb};
 
 struct LaneDef { const char* knob[kKnobs]; uint8_t def[kLaneParams]; const char* help; };
 static const LaneDef kLaneDefs[kLanes] = {
     {{"AMOUNT", "TYPE", "TONE", "LOW CUT", "BIAS", "LEVEL", nullptr},      {50, 0, 90, 0, 64, 64, 0, 127},   "Saturation: soft, hard, folded or tube-like"},
     {{"BITS", "RATE", "NOISE", "DRIVE", "TONE", "LEVEL", nullptr},         {70, 40, 0, 30, 110, 64, 0, 127}, "Bit and sample-rate reduction"},
-    {{"CUTOFF", "RESO", "TYPE", "SWEEP", "ENV", "DRIVE", nullptr},         {50, 60, 0, 64, 64, 0, 0, 127},   "Resonant filter; SWEEP moves it across each step, ENV follows the level"},
+    {{"CUTOFF", "RESO", "TYPE", "SWEEP", "ENV", "DRIVE", "LFO"},           {50, 60, 0, 64, 64, 0, 0, 127},   "Resonant filter; SWEEP across each step, ENV follows the level, LFO in tempo"},
     {{"THRESH", "RATIO", "ATTACK", "RELEASE", "MAKEUP", "KNEE", "SOURCE"},  {70, 60, 30, 50, 0, 40, 0, 127},  "Compressor. MIX < 100% = parallel; SOURCE SIDECHAIN = ducks to the side-chain"},
     {{"RATE", "DEPTH", "DELAY", "VOICES", "WIDTH", "TONE", nullptr},       {40, 60, 50, 32, 100, 110, 0, 64},"Chorus: one to four modulated voices"},
     {{"RATE", "SYNC", "DEPTH", "MANUAL", "FEEDBACK", "WIDTH", nullptr},    {30, 0, 80, 40, 90, 80, 0, 127},  "Flanger: a very short modulated delay with feedback"},
@@ -57,6 +59,23 @@ enum LaneMode { lmSteps = 0, lmAlways = 1, lmOneShot = 2 };
 static const char* const kModeNames[3] = {"STEPS", "ALWAYS", "1-SHOT"};
 static const char* const kDriveTypes[4] = {"SOFT", "HARD", "FOLD", "TUBE"};
 static const char* const kFilterTypes[4] = {"LOW PASS", "BAND PASS", "HIGH PASS", "NOTCH"};
+// FILTER LFO (0.4): synced to the song position; RATE and WAVE are indices (globals), depth = FILTER knob 7 (LFO)
+static constexpr int kFltLfoRates = 12, kFltLfoWaves = 6;
+static const double kFltLfoBeats[kFltLfoRates] = {16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25, 0.125, 2.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0, 0.75};
+static const char* const kFltLfoRateNames[kFltLfoRates] = {"4 BARS", "2 BARS", "1 BAR", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T", "1/8D"};
+static const char* const kFltLfoWaveNames[kFltLfoWaves] = {"TRIANGLE", "SINE", "SQUARE", "SAW UP", "SAW DOWN", "RANDOM"};
+inline float fltLfoShape(int wave, double ph)
+{
+    const float x = (float)(ph - std::floor(ph));
+    switch (wave) {
+    case 0: return x < 0.5f ? 4.f * x - 1.f : 3.f - 4.f * x;
+    case 1: return std::sin(6.28318530717959f * x);
+    case 2: return x < 0.5f ? 1.f : -1.f;
+    case 3: return 2.f * x - 1.f;
+    case 4: return 1.f - 2.f * x;
+    default: { uint32_t h = (uint32_t)(int64_t)std::floor(ph) * 2654435761u; h ^= h >> 15; h *= 2246822519u; h ^= h >> 13; return (h & 0xFFFF) / 32767.5f - 1.f; }
+    }
+}
 inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 inline int bin8(float v) { int b = (int)(v / 16.f); return b < 0 ? 0 : (b > 7 ? 7 : b); }
 inline int bin4(float v) { int b = (int)(v / 32.f); return b < 0 ? 0 : (b > 3 ? 3 : b); }
@@ -75,6 +94,7 @@ enum Global {
     gLFO2_WAVE, gLFO2_RATE, gLFO2_SYNC, gLFO2_DEPTH, gLFO2_DEST, gLFO2_PHASE,
     gENV_SENS, gENV_ATTACK, gENV_RELEASE, gENV_DEPTH, gENV_DEST,            // envelope follower (the input level as a modulation)
     gENV_SRC,                                                              // 0.3: follows the input or the side-chain
+    gFLFO_RATE, gFLFO_WAVE,                                                // 0.4: the FILTER lane's own LFO (depth = its knob LFO)
     gOUT_STEP, gOUT_ACTIVE, gOUT_PATTERN, gOUT_SC, kGlobalParams
 };
 static constexpr int kLfos = 2, kLfoParams = 6, kMods = 3;   // mod source 2 = the envelope follower (5 knobs)
@@ -98,6 +118,7 @@ inline float globalDefault(int g)
     switch (g) {
     case gDRYWET: return 127.f; case gINPUT: return 96.f; case gOUTPUT: return 96.f;
     case gTEMPO: return 120.f; case gOUT_STEP: return -1.f;
+    case gFLFO_RATE: return 4.f; case gFLFO_WAVE: return 1.f;
     case gLFO1_RATE: case gLFO2_RATE: return 50.f;
     case gLFO1_DEPTH: case gLFO2_DEPTH: case gENV_DEPTH: return 64.f;
     case gENV_SENS: return 64.f; case gENV_ATTACK: return 20.f; case gENV_RELEASE: return 60.f;

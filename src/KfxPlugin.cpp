@@ -97,6 +97,8 @@ protected:
         case gOUT_PATTERN: p.name = "Playing Pattern"; p.symbol = "out_pattern"; p.hints = kParameterIsOutput | kParameterIsInteger;
             p.ranges.min = 0; p.ranges.max = kPatterns - 1; p.ranges.def = 0; return;
         case gENV_SRC: p.name = "Envelope Source"; p.symbol = "env_source"; p.ranges.min = 0; p.ranges.max = 127; p.ranges.def = 0; return;
+        case gFLFO_RATE: p.name = "Filter LFO Rate"; p.symbol = "filter_lfo_rate"; p.ranges.min = 0; p.ranges.max = (float)(kFltLfoRates - 1); p.ranges.def = globalDefault(g); p.hints |= kParameterIsInteger; return;
+        case gFLFO_WAVE: p.name = "Filter LFO Wave"; p.symbol = "filter_lfo_wave"; p.ranges.min = 0; p.ranges.max = (float)(kFltLfoWaves - 1); p.ranges.def = globalDefault(g); p.hints |= kParameterIsInteger; return;
         case gOUT_SC: p.name = "Side-chain Level"; p.symbol = "out_sc"; p.hints = kParameterIsOutput;
             p.ranges.min = 0; p.ranges.max = 1; p.ranges.def = 0; return;
         default: break;

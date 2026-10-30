@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- The lanes are listed in the order they process the sound. Drag a lane's name up or down to move it in the chain
+  (the list shows where it lands while you drag); < EARLIER / LATER > still work.
+- COMP is now last in the chain by default (projects and presets saved before keep their order).
+- FILTER LFO: the FILTER lane's 7th knob LFO = its depth (up to +/- 4 octaves, lockable per step); RATE (4 bars to
+  1/32, triplets, dotted) and WAVE (triangle, sine, square, saws, random) in the FILTER editor, in tempo. The filter
+  display shows its reach and follows it while playing.
+- UNDO in red, as the other Kinetik plug-ins.
+
 ## 0.3.0
 
 - Side-chain input (VST3 / CLAP; a second stereo input): COMP SOURCE = SIDECHAIN ducks the sound to it (a kick on the

@@ -61,6 +61,7 @@ public:
     float lfoOut[kMods] = {};
     const float* scL = nullptr; const float* scR = nullptr;   // side-chain input of the next process() (nullptr = none)
     float scPeak = 0.f;                                     // its level, for the UI                     // last modulation values (-1..1, depth applied) for the UI
+    float fltLfoNow = 0.f;                                  // FILTER LFO (-1..1, before its depth), for the UI
 
     void process(const float* inL, const float* inR, float* outL, float* outR, uint32_t frames, const Transport& tp)
     {
@@ -183,6 +184,8 @@ public:
             applyLfos(beat, playing, (float)n / sr);
             // ---- set the effects for this segment
             ctx.stepPhase = lane[lnFilter].stepPh;
+            fltLfoNow = fltLfoShape(clampi((int)global[gFLFO_WAVE], 0, kFltLfoWaves - 1), beat / kFltLfoBeats[clampi((int)global[gFLFO_RATE], 0, kFltLfoRates - 1)]);
+            ctx.fltLfo = fltLfoNow;
             drive.set(lane[lnDrive].p, ctx); crush.set(lane[lnCrush].p, ctx); filt.set(lane[lnFilter].p, ctx); comp.set(lane[lnComp].p, ctx);
             chorus.set(lane[lnChorus].p, ctx); flanger.set(lane[lnFlanger].p, ctx); dly.set(lane[lnDelay].p, ctx); rev.set(lane[lnReverb].p, ctx);
             const int pm = modelOf(lane[lnPerform].p[6], kPerformModels);
