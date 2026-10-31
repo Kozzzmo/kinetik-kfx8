@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- **New factory presets**: 17 effect sequences over 4 bars (64 steps) using lane modes, tied gestures, conditions,
+  per-step locks, lane lengths and speeds, both LFOs, the envelope follower, the FILTER LFO, STUTTER / REVERSE /
+  TAPE STOP gestures and chains (Stutter Fills, Reverse Swells, Envelope Wah and Glitch Chain are new).
+- Every preset plays about as loud as the dry signal (OUTPUT trimmed per preset).
+
 ## 0.4.0
 
 - The lanes are listed in the order they process the sound. Drag a lane's name up or down to move it in the chain

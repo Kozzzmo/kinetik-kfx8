@@ -15,7 +15,7 @@ Repository: `Kozzzmo/kinetik-kfx8` (public, created 2026-10-27; first built loca
 | `Engine.hpp` | transport, pattern change at the master length (or `ChainPlayer`), per lane: step on its grid, condition decided at the step start (`condPasses`, loop count since `patStartBeat`, FILL), ties, 1-SHOT (`shotPending` on a hold press, plays `len` steps from the next step), ALWAYS; `applyLfos` (2 LFOs + envelope follower `envVal`) adds to the knob or lock of the destination per 32-sample segment; lanes processed in `bank.order`; tails (DELAY, REVERB) fed only while on |
 | `KfxPlugin.cpp` | DPF glue; MIDI C2-G#2 hold lanes / start 1-SHOT lanes, A2 = FILL, C3-D#4 patterns; cmds `hold <mask>`, `fill 0/1` |
 | `KfxUI.cpp` | 1180x720: lanes (mode STEPS / ALWAYS / 1-SHOT, ON/OFF, PUSH / SHOT, `#n` = place in the chain, TIE drawn as a joined bar, condition text), page buttons extend the lane (`showPage`), right panel (patterns + CHAIN, RANDOM LANE / ALL, FILL (HOLD), UNDO), editor: LCD + knobs (PERFORM names by model), `< EARLIER / LATER >` (order) or CONDITION in lock mode, MODE; tabs LFO1 / LFO2 / ENV / LANE EDITOR (`edLfo`, `modParam`), destination window `ovDest`, CHAIN window `ovChain` |
-| `Presets.hpp` | 14 factory presets (`PB`: `knobs` = 6 knobs + MIX, `model`, `always`, `row`, `lock`) |
+| `Presets.hpp` | (0.5: 17 presets, see below) factory presets (`PB`: `knobs` = 6 knobs + MIX, `model`, `always`, `row`, `lock`) |
 | shared (identical in the family, `scripts/check-shared.sh`) | `Skins.hpp`, `Fonts.hpp`, `Dsp.hpp`, `FsUtf8.hpp`, `Updater.*`, `License.hpp`, `LogoMark.hpp`, `Chain.hpp`, monocypher, `fonts/OFL-Unbounded.txt` |
 
 User presets: `%APPDATA%\Kinetik\KFX-8\Presets\*.kfx8` (`KFX8-PRESET 1`, `NAME`, `V <param> <value>`, `BANK` + bank).
@@ -56,3 +56,9 @@ View file `KinetikKFX8-view.txt` ("skin zoom").
 - FILTER knob 6 = LFO (depth); globals `gFLFO_RATE gFLFO_WAVE` (appended before the outputs; `kFltLfoBeats`, `fltLfoShape`,
   synced to the song position); `FxCtx::fltLfo`, `Engine::fltLfoNow`. UI: in the FILTER editor the EARLIER / LATER row shows
   the LFO RATE / WAVE buttons; the filter graphic shows its reach. Red UNDO.
+
+## 0.5.0 — new factory presets
+
+- `Presets.hpp`: `PB2` helpers (`row` with "-" = tied step, `cyc` locks per lit step, `cond`, `length`, `copy`, `chain`,
+  `lfo(i, wave, sync, depth, lane, knob)`, `env(...)`, `filterLfo`, `order`), `PresetDef::trimDb` = OUTPUT trim so the
+  preset is as loud as the dry signal (measured with a drum-like loop, BS.1770).
