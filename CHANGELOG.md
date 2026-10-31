@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- The presets window lists 18 rows (the last three factory presets were cut off).
+
 ## 0.5.0
 
 - **New factory presets**: 17 effect sequences over 4 bars (64 steps) using lane modes, tied gestures, conditions,

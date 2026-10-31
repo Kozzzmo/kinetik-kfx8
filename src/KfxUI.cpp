@@ -260,7 +260,7 @@ protected:
     R skinRow(int i) const { return {264.f + (i % 2) * 330.f, 150.f + (i / 2) * 148.f, 316.f, 136.f}; }
     R zoomBtn(int i) const { return {264.f + i * 109.f, 486.f, 101.f, 36.f}; }
     R presetsBox() const { return {80.f, 60.f, 1020.f, 600.f}; }
-    R presetItem(int col, int row) const { return {100.f + col * 500.f, 130.f + row * 30.f, 480.f, 27.f}; }
+    R presetItem(int col, int row) const { return {100.f + col * 500.f, 130.f + row * 26.f, 480.f, 24.f}; }   // 18 rows above CLOSE
     R presetsClose() const { return {980.f, 606.f, 100.f, 36.f}; }
     R saveBox() const { return {290.f, 200.f, 600.f, 270.f}; }
     R saveField() const { return {320.f, 290.f, 540.f, 52.f}; }
@@ -904,7 +904,7 @@ protected:
         number(100, 92, "Presets", 22.f, th->text, ALIGN_LEFT | ALIGN_MIDDLE);
         label(100, 120, "FACTORY", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         label(600, 120, "YOURS", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
-        for (int i = 0; i < kNumPresets && i < 15; ++i) {
+        for (int i = 0; i < kNumPresets && i < 18; ++i) {
             const R r = presetItem(0, i);
             const bool sel = presetNameStr == kPresets[i].name;
             if (sel) box(r, th->selFill); else box(r, th->btnFill);
@@ -912,7 +912,7 @@ protected:
             label(r.x + r.w - 10, r.cy() + 1, kPresets[i].desc, 8.5f, sel ? th->selText : th->dim, ALIGN_RIGHT | ALIGN_MIDDLE);
         }
         if (userPresets.empty()) label(600, 145, "none yet: SAVE AS PRESET stores the knobs and the 16 patterns", 9.5f, th->faint, ALIGN_LEFT | ALIGN_MIDDLE);
-        for (int i = 0; i < (int)userPresets.size() && i < 15; ++i) {
+        for (int i = 0; i < (int)userPresets.size() && i < 18; ++i) {
             const R r = presetItem(1, i);
             const bool sel = presetNameStr == userPresets[i];
             if (sel) box(r, th->selFill); else box(r, th->btnFill);
@@ -923,8 +923,8 @@ protected:
     }
     void presetsClick(float x, float y)
     {
-        for (int i = 0; i < kNumPresets && i < 15; ++i) if (presetItem(0, i).in(x, y)) { loadFactory(i); return; }
-        for (int i = 0; i < (int)userPresets.size() && i < 15; ++i) if (presetItem(1, i).in(x, y)) { loadUser(userPresets[i]); return; }
+        for (int i = 0; i < kNumPresets && i < 18; ++i) if (presetItem(0, i).in(x, y)) { loadFactory(i); return; }
+        for (int i = 0; i < (int)userPresets.size() && i < 18; ++i) if (presetItem(1, i).in(x, y)) { loadUser(userPresets[i]); return; }
         if (presetsClose().in(x, y) || !presetsBox().in(x, y)) { overlay = ovNone; presetMsg.clear(); }
         repaint();
     }
