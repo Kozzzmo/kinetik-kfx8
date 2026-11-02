@@ -276,23 +276,6 @@ struct Delay {
     void clear() { std::fill(L.begin(), L.end(), 0.f); std::fill(R.begin(), R.end(), 0.f); for (int k = 0; k < 3; ++k) { apL[k].clear(); apR[k].clear(); } idle = size + 1; }
 };
 
-// octave-up shifter (two crossfaded taps reading twice as fast), for the SHIMMER reverb
-struct OctaveUp {
-    std::vector<float> b; int w = 0; float ph = 0.f, inc = 0.f; int win = 2048;
-    void init(float sr) { win = (int)(0.045f * sr); b.assign((size_t)win * 2 + 4, 0.f); w = 0; ph = 0.f; inc = 1.f / win; }
-    void clear() { std::fill(b.begin(), b.end(), 0.f); }
-    inline float process(float x)
-    {
-        b[(size_t)w] = x;
-        ph += inc; if (ph >= 1.f) ph -= 1.f;
-        float p2 = ph + 0.5f; if (p2 >= 1.f) p2 -= 1.f;
-        const float a = ringRead(b, w, 1.0 + (1.f - ph) * win), c = ringRead(b, w, 1.0 + (1.f - p2) * win);
-        const float ga = std::sin(kPi * ph), gc = std::sin(kPi * p2);
-        if (++w >= (int)b.size()) w = 0;
-        return a * ga * ga + c * gc * gc;
-    }
-};
-
 // ---------------------------------------------------------------- REVERB (8-line FDN; wet only)
 // models: ROOM (short, early), PLATE (dense input diffusion, bright), HALL (long lines, slow movement),
 // SPRING (short tank, dispersive allpasses = the chirp, band-limited), SHIMMER (hall + an octave up fed back)
@@ -301,7 +284,9 @@ struct Reverb {
     std::vector<float> buf[kN]; int len[kN] = {}, pos[kN] = {}, model = -1;
     float g[kN] = {}, z[kN] = {}, damp = 0.3f, sr = 48000.f, mod = 0.f, modPh = 0.f, width = 1.f, rt = 2.f;
     std::vector<float> pre; int pw = 0; int preD = 0; bool cut = false; OnePole cutL, sprLp, sprHp;
-    Allpass diff[4], disp[8]; OctaveUp oct; float shim = 0.f;
+    Allpass diff[4], disp[8];
+    float shG[kN] = {}, shD[kN] = {}, shHp[kN] = {}, shHpA = 0.996f;
+    static constexpr float kShimAmt = 0.55f, kShimKeep = 0.8793f;   // keep^2 + 0.75 amt^2 = 1
     int idle = 0;
     void init(float s)
     {
@@ -311,7 +296,7 @@ struct Reverb {
         static const int dl[4] = {142, 107, 379, 277};
         for (int k = 0; k < 4; ++k) diff[k].init((int)(dl[k] * s / 48000.f), 0.7f);
         for (int k = 0; k < 8; ++k) disp[k].init(2 + k % 3, 0.62f);
-        oct.init(s);
+        shHpA = std::exp(-kTwoPi * 30.f / s);
         sprLp.setLP(4200.f, s); sprHp.setLP(180.f, s);
         model = -1; setModel(1);
         clear();
@@ -323,15 +308,16 @@ struct Reverb {
         static const float ms[kN] = {31.3f, 37.9f, 41.1f, 47.3f, 53.9f, 59.1f, 67.7f, 73.3f};
         static const float scale[kReverbModels] = {0.55f, 0.8f, 1.6f, 0.35f, 1.4f};
         for (int i = 0; i < kN; ++i) len[i] = std::max(16, std::min((int)buf[i].size() - 2, (int)(ms[i] * 0.001f * sr * 1.5f * scale[m])));
+        for (int i = 0; i < kN; ++i) { shG[i] = std::max(256.f, len[i] * 0.85f); shD[i] = 1.f + shG[i] * i / 8.f; }
         clear();
     }
     void clear()
     {
         for (int i = 0; i < kN; ++i) { std::fill(buf[i].begin(), buf[i].end(), 0.f); pos[i] = 0; z[i] = 0.f; }
-        std::fill(pre.begin(), pre.end(), 0.f); pw = 0; idle = 1 << 30; shim = 0.f;
+        std::fill(pre.begin(), pre.end(), 0.f); pw = 0; idle = 1 << 30;
+        for (int i = 0; i < kN; ++i) shHp[i] = 0.f;
         for (auto& a : diff) a.clear();
         for (auto& a : disp) a.clear();
-        oct.clear();
     }
     void set(const float* p, const FxCtx& c)
     {
@@ -354,7 +340,6 @@ struct Reverb {
         if (cut) x -= cutL.lp(x);
         if (model == 1) for (auto& a : diff) x = a.process(x);                          // plate: dense from the start
         if (model == 3) { x = sprLp.lp(x); x -= sprHp.lp(x); for (auto& a : disp) x = a.process(x); }   // spring chirp
-        if (model == 4) x += shim * 0.45f;
         pre[(size_t)pw] = x;
         int rp = pw - preD; if (rp < 0) rp += (int)pre.size();
         const float xin = pre[(size_t)rp];
@@ -368,6 +353,17 @@ struct Reverb {
                 const int i0 = (int)rd % n, i1 = (i0 + 1) % n; const float a = (float)(rd - std::floor(rd));
                 o[i] = buf[i][(size_t)i0] + (buf[i][(size_t)i1] - buf[i][(size_t)i0]) * a;
             } else o[i] = buf[i][(size_t)pos[i]];
+            if (model == 4 && (i == 0 || i == 3 || i == 6)) {
+                // SHIMMER (after the Clouds / Parasites reverb, MIT): the line is also read by two Hann-windowed taps
+                // moving twice as fast (an octave up); the feedback crossfades plain / shifted so the energy never grows
+                const int n = len[i]; const float G = shG[i];
+                shD[i] -= 1.f; if (shD[i] < 1.f) shD[i] += G;
+                float d2 = shD[i] + 0.5f * G; if (d2 >= G + 1.f) d2 -= G;
+                auto rd = [&](float d) { double r = pos[i] - d; while (r < 0) r += n; const int i0 = (int)r % n, i1 = (i0 + 1) % n;
+                                         const float f = (float)(r - std::floor(r)); return buf[i][(size_t)i0] + (buf[i][(size_t)i1] - buf[i][(size_t)i0]) * f; };
+                const float sa = std::sin(kPi * (shD[i] - 1.f) / G), wa = sa * sa;
+                o[i] = o[i] * kShimKeep + (rd(shD[i]) * wa + rd(d2) * (1.f - wa)) * kShimAmt;
+            }
         }
         float a[kN]; for (int i = 0; i < kN; ++i) a[i] = o[i];
         for (int h = 1; h < kN; h <<= 1)
@@ -377,11 +373,12 @@ struct Reverb {
             float y = a[i] * 0.35355339f * g[i];
             z[i] = y + (z[i] - y) * damp;
             const float in = (i & 1) ? xin - side * 0.5f : xin + side * 0.5f;
-            buf[i][(size_t)pos[i]] = z[i] + in * 0.3f;
+            float zz = z[i];
+            if (model == 4) { shHp[i] = zz + shHpA * (shHp[i] - zz); zz -= shHp[i]; if (std::fabs(zz) > 1.f) zz = std::tanh(zz); }
+            buf[i][(size_t)pos[i]] = zz + in * 0.3f;
             if (++pos[i] >= len[i]) pos[i] = 0;
         }
         float l = (o[0] + o[2] + o[4] + o[6]) * 0.5f, r = (o[1] + o[3] + o[5] + o[7]) * 0.5f;
-        if (model == 4) shim = oct.process((l + r) * 0.5f);
         const float mid = (l + r) * 0.5f, sd = (l - r) * 0.5f * width;
         outL = mid + sd; outR = mid - sd;
         if (std::fabs(outL) + std::fabs(outR) < 1e-6f) ++idle; else idle = 0;

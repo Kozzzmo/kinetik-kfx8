@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- **SHIMMER reverb model rebuilt** (REVERB lane): the octave-up sound now lives inside the reverb's feedback, crossfaded with the normal tail instead of added on top, so it never builds up or crackles and keeps the colour of the source.
+
 ## 0.5.1
 
 - The presets window lists 18 rows (the last three factory presets were cut off).
