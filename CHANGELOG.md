@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- **Same layout as the other Kinetik plug-ins.** One window size (1180 x 800) and a common bottom bar at the same place in every plug-in: REC / CLICK, RANDOM (a menu), FILL (HOLD), UNDO (shows what it undoes), the plug-in's own buttons, PRESETS (with the preset's name) and SAVE. PAT / PLAY / BPM / SKIN keep the same spot in the header.
+- The window is 800 high. RANDOM (menu: LANE, PATTERN), FILL (HOLD), UNDO, PRESETS and SAVE moved to the bottom bar.
+- PATTERNS: CHAIN COPY PASTE CLEAR above A01-A16 (larger buttons). Lane toolbar in the family's order (pages, LEN, SPEED, < >, COPY PASTE CLEAR, ALL ON).
+
 ## 0.5.2
 
 - **SHIMMER reverb model rebuilt** (REVERB lane): the octave-up sound now lives inside the reverb's feedback, crossfaded with the normal tail instead of added on top, so it never builds up or crackles and keeps the colour of the source.

@@ -4,6 +4,7 @@
 #include "Presets.hpp"
 #include "Fx.hpp"
 #include "Skins.hpp"
+#include "Frame.hpp"
 #include "LogoMark.hpp"
 #include "Fonts.hpp"
 #include "License.hpp"
@@ -24,7 +25,7 @@ START_NAMESPACE_DISTRHO
 using namespace kn;
 using DGL_NAMESPACE::Color;
 
-static constexpr float W = 1180.f, H = 720.f;
+static constexpr float W = kframe::kW, H = kframe::kH;
 static constexpr int kFineSteps = 24;   // out_step is in 1/24 of a 16th
 
 struct R {
@@ -39,6 +40,8 @@ enum Overlay { ovNone, ovPresets, ovSkins, ovSave, ovLicense, ovUpdate, ovChain,
 
 class KfxUI : public UI
 {
+    template <class, class> friend struct kframe::Draw;
+    static R fr(const kframe::Rc& c) { return R{c.x, c.y, c.w, c.h}; }
 public:
     KfxUI()
         : UI(W, H)
@@ -185,24 +188,25 @@ protected:
 
     // ------------------------------------------------------------------ layout
     R logoArea() const { return {12.f, 4.f, 372.f, 50.f}; }
-    R patLenBox() const { return {536.f, 9.f, 76.f, 40.f}; }
-    R swingBox() const { return {618.f, 9.f, 76.f, 40.f}; }
-    R patBox() const { return {700.f, 9.f, 130.f, 40.f}; }
-    R playBtn() const { return {840.f, 9.f, 84.f, 40.f}; }
-    R tempoBox() const { return {932.f, 9.f, 110.f, 40.f}; }
-    R skinBtn() const { return {1050.f, 9.f, 116.f, 40.f}; }
+    R patLenBox() const { return {534.f, 9.f, 76.f, 40.f}; }
+    R swingBox() const { return {616.f, 9.f, 76.f, 40.f}; }
+    R patBox() const { return fr(kframe::patBox()); }
+    R playBtn() const { return fr(kframe::playBtn()); }
+    R tempoBox() const { return fr(kframe::tempoBox()); }
+    R skinBtn() const { return fr(kframe::skinBtn()); }
     // lanes
     R stepPageBtn(int i) const { return {24.f + i * 58.f, 66.f, 54.f, 26.f}; }
-    R lenMinus() const { return {300.f, 66.f, 26.f, 26.f}; }
-    R lenBox() const { return {328.f, 66.f, 70.f, 26.f}; }
-    R lenPlus() const { return {400.f, 66.f, 26.f, 26.f}; }
-    R speedBtn() const { return {434.f, 66.f, 92.f, 26.f}; }
-    R rotL() const { return {534.f, 66.f, 28.f, 26.f}; }
-    R rotR() const { return {564.f, 66.f, 28.f, 26.f}; }
-    R fillBtn() const { return {600.f, 66.f, 58.f, 26.f}; }
-    R clearLaneBtn() const { return {662.f, 66.f, 62.f, 26.f}; }
-    R copyLaneBtn() const { return {728.f, 66.f, 60.f, 26.f}; }
-    R pasteLaneBtn() const { return {792.f, 66.f, 60.f, 26.f}; }
+    // sequencer toolbar, in the family's order: pages | LEN | SPEED | < > | COPY PASTE CLEAR | ... ALL ON
+    R lenMinus() const { return {262.f, 66.f, 26.f, 26.f}; }
+    R lenBox() const { return {290.f, 66.f, 70.f, 26.f}; }
+    R lenPlus() const { return {362.f, 66.f, 26.f, 26.f}; }
+    R speedBtn() const { return {396.f, 66.f, 92.f, 26.f}; }
+    R rotL() const { return {496.f, 66.f, 28.f, 26.f}; }
+    R rotR() const { return {526.f, 66.f, 28.f, 26.f}; }
+    R copyLaneBtn() const { return {562.f, 66.f, 60.f, 26.f}; }
+    R pasteLaneBtn() const { return {626.f, 66.f, 60.f, 26.f}; }
+    R clearLaneBtn() const { return {690.f, 66.f, 62.f, 26.f}; }
+    R fillBtn() const { return {780.f, 66.f, 72.f, 26.f}; }
     // lanes are listed in their processing order (0.4); while a lane is dragged the list shows where it would land
     int rowOf(int l) const
     {
@@ -228,32 +232,32 @@ protected:
     R stepCell(int l, int i) const { return {212.f + i * 40.f, rowY(l), 37.f, 38.f}; }
     // right panel
     R gKnob(int i) const { return {874.f + i * 98.f, 64.f, 94.f, 120.f}; }
-    R patBtn(int i) const { return {880.f + (i % 4) * 70.f, 214.f + (i / 4) * 34.f, 64.f, 30.f}; }
-    R patCopy() const { return {880.f, 356.f, 64.f, 28.f}; }
-    R patPaste() const { return {950.f, 356.f, 64.f, 28.f}; }
-    R patClear() const { return {1020.f, 356.f, 64.f, 28.f}; }
-    R chainBtn() const { return {1090.f, 356.f, 66.f, 28.f}; }
-    R rndLaneBtn() const { return {880.f, 398.f, 134.f, 34.f}; }
-    R rndAllBtn() const { return {1022.f, 398.f, 134.f, 34.f}; }
-    R fillPerfBtn() const { return {880.f, 440.f, 134.f, 34.f}; }
-    R undoBtn() const { return {1022.f, 440.f, 134.f, 34.f}; }
+    // PATTERNS: CHAIN COPY PASTE CLEAR, then A01..A16
+    R chainBtn() const { return {880.f, 220.f, 66.f, 28.f}; }
+    R patCopy() const { return {950.f, 220.f, 66.f, 28.f}; }
+    R patPaste() const { return {1020.f, 220.f, 66.f, 28.f}; }
+    R patClear() const { return {1090.f, 220.f, 66.f, 28.f}; }
+    R patBtn(int i) const { return {880.f + (i % 4) * 70.f, 258.f + (i / 4) * 40.f, 66.f, 34.f}; }
+    // bottom bar (Frame.hpp): RANDOM | FILL (HOLD) | UNDO | PRESETS SAVE
+    R rndBtn() const { return fr(kframe::randomBtn()); }
+    R fillPerfBtn() const { return fr(kframe::fillBtn()); }
+    R undoBtn() const { return fr(kframe::undoBtn()); }
     // bottom: selected lane
     R lcdR() const { return {24.f, 506.f, 250.f, 192.f}; }
     R knobR(int k) const { return {280.f + k * 73.f, 524.f, 72.f, 120.f}; }
-    R lfoTab(int i) const { return {1010.f + i * 51.f, 602.f, 48.f, 30.f}; }
+    R lfoTab(int i) const { return {1010.f + i * 51.f, 516.f, 48.f, 30.f}; }
     R orderUp() const { return {36.f, 640.f, 110.f, 22.f}; }
     R orderDn() const { return {152.f, 640.f, 110.f, 22.f}; }
     R condBtn() const { return {36.f, 640.f, 226.f, 22.f}; }
-    R laneTab() const { return {1010.f, 638.f, 150.f, 26.f}; }
+    R laneTab() const { return {1010.f, 552.f, 150.f, 26.f}; }
     R destBox() const { return {130.f, 80.f, 920.f, 560.f}; }
     R destCell(int l, int k) const { return {250.f + k * 98.f, 140.f + l * 52.f, 94.f, 44.f}; }
     R destNone() const { return {150.f, 586.f, 140.f, 36.f}; }
     R destClose() const { return {910.f, 586.f, 120.f, 36.f}; }
     R lockClearBtn() const { return {166.f, 514.f, 98.f, 24.f}; }
     R modeBigBtn() const { return {36.f, 668.f, 226.f, 22.f}; }
-    R presetName() const { return {870.f, 516.f, 134.f, 80.f}; }
-    R presetBtn() const { return {1010.f, 516.f, 150.f, 36.f}; }
-    R saveBtn() const { return {1010.f, 558.f, 150.f, 36.f}; }
+    R presetBtn() const { return fr(kframe::presetsBtn()); }
+    R saveBtn() const { return fr(kframe::saveBtn()); }
     R gripR() const { return {W - 22.f, H - 22.f, 22.f, 22.f}; }
     // overlays
     R viewBox() const { return {240.f, 96.f, 700.f, 520.f}; }
@@ -414,6 +418,7 @@ protected:
         drawLanes();
         drawRight();
         drawEditor();
+        drawBottomBar();
         if (overlay == ovPresets) drawPresets();
         if (overlay == ovSkins) drawSkins();
         if (overlay == ovSave) drawSave();
@@ -421,6 +426,7 @@ protected:
         if (overlay == ovUpdate) drawUpdate();
         if (overlay == ovChain) drawChain();
         if (overlay == ovDest) drawDest();
+        if (overlay == ovNone) kframe::Draw<R, KfxUI>::drawRandomMenu(*this, barInfo());
         if (tipShown && overlay == ovNone) drawTip();
         drawGrip();
     }
@@ -568,8 +574,8 @@ protected:
             else { const float db = trimDb(v); if (db < -100.f) std::snprintf(b, sizeof(b), "-INF"); else std::snprintf(b, sizeof(b), "%+.1fdB", db); }
             drawKnob(gKnob(i), v / 127.f, names[i], b, false, drag == dkGlobal && dragIndex == i);
         }
-        label(884, 200, "PATTERNS", 10.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
-        if (!patMsg.empty()) label(1156, 200, patMsg.c_str(), 9.5f, th->lock, ALIGN_RIGHT | ALIGN_MIDDLE);
+        label(884, 204, "PATTERNS", 10.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        if (!patMsg.empty()) label(1156, 204, patMsg.c_str(), 9.5f, th->lock, ALIGN_RIGHT | ALIGN_MIDDLE);
         const int ep = editPattern(), pp = (int)std::lround(gp(gOUT_PATTERN));
         const bool running = gp(gOUT_STEP) >= 0.f;
         for (int i = 0; i < kPatterns; ++i) {
@@ -582,14 +588,22 @@ protected:
         }
         button(patCopy(), "COPY", false, 9.5f); button(patPaste(), "PASTE", false, 9.5f); button(patClear(), "CLEAR", false, 9.5f);
         button(chainBtn(), "CHAIN", bank->chain.active(), 9.5f);
-        button(rndLaneBtn(), "RANDOM LANE", false, 10.f);
-        button(rndAllBtn(), "RANDOM ALL", false, 10.f);
-        button(fillPerfBtn(), "FILL (HOLD)", drag == dkFill, 10.f);
-        const bool can = !undoStack.empty();
-        // UNDO in red, as the other Kinetik plug-ins
-        if (can) { box(undoBtn(), th->btnFill); frame(undoBtn(), th->lock, -1.f, 1.5f); label(undoBtn().cx(), undoBtn().cy() + 1, "UNDO", 10.5f, th->lock, ALIGN_CENTER | ALIGN_MIDDLE, th->fontButton); }
-        else { box(undoBtn(), th->btnFill); frame(undoBtn(), Color(th->btnEdge, th->bg, 0.5f)); label(undoBtn().cx(), undoBtn().cy() + 1, "UNDO", 10.5f, th->faint); }
     }
+
+    // the family's bottom bar (Frame.hpp); KFX-8 records nothing, so no REC / CLICK
+    kframe::Bar barInfo() const
+    {
+        kframe::Bar b;
+        b.hasRec = false;
+        b.fill = drag == dkFill;
+        b.undoValid = !undoStack.empty(); b.redoValid = !redoStack.empty();
+        if (b.undoValid) b.undoWhat = undoStack.back().what;
+        b.preset = presetNameStr;
+        b.randomOpen = rndOpen;
+        b.randomItems = {{"LANE", "the selected lane"}, {"PATTERN", "three to five lanes"}};
+        return b;
+    }
+    void drawBottomBar() { kframe::Draw<R, KfxUI>::drawBar(*this, barInfo()); }
 
     // the selected lane: LCD (name, what it does, a picture of its knobs) + its 5 knobs
     bool knobUsed(int k) const { return k >= kKnobs || kLaneDefs[selLane].knob[k] != nullptr; }
@@ -649,13 +663,7 @@ protected:
                 label(lc.x + lc.w - 14, lc.y + 22, ob, 9.f, th->lcdDim, ALIGN_RIGHT | ALIGN_MIDDLE);
             }
         }
-        // preset name + buttons, LFO tabs
-        const R pn = presetName();
-        label(pn.x + pn.w - 4, pn.y + 10, "PRESET", 9.f, th->dim, ALIGN_RIGHT | ALIGN_MIDDLE);
-        number(pn.x + pn.w - 4, pn.y + 34, presetNameStr.c_str(), 15.f, th->text, ALIGN_RIGHT | ALIGN_MIDDLE);
-        box(presetBtn(), th->btnFill); frame(presetBtn(), th->text, -1.f, 1.5f);
-        label(presetBtn().cx(), presetBtn().cy() + 1, "PRESETS", 11.5f, th->text);
-        button(saveBtn(), "SAVE AS PRESET", false, 10.5f);
+        // LFO tabs
         for (int i = 0; i < kMods; ++i) {
             const bool used = (int)std::lround(gp(modParam(i, 4))) > 0 && std::fabs(gp(modParam(i, 3)) - 64.f) > 0.5f;
             char b[16]; std::snprintf(b, sizeof(b), i < kLfos ? (used ? "LFO%d*" : "LFO%d") : (used ? "ENV*" : "ENV"), i + 1);
@@ -1260,8 +1268,7 @@ protected:
         for (int i = 0; i < 3; ++i) if (gKnob(i).in(x, y))
             return i == 0 ? "DRY/WET: how much of the effects you hear (100% = only the effect chain)." : (i == 1 ? "INPUT: level into the effects." : "OUTPUT: level out of KFX-8.");
         for (int i = 0; i < kPatterns; ++i) if (patBtn(i).in(x, y)) return "Choose the pattern (while playing it starts at the end of the current one). MIDI notes C3 to D#4 choose A01 to A16.";
-        if (rndLaneBtn().in(x, y)) return "Random steps, locks and knobs for the selected lane (UNDO restores).";
-        if (rndAllBtn().in(x, y)) return "A random pattern on three to five lanes (UNDO restores).";
+        if (rndBtn().in(x, y)) return "RANDOM: random steps, locks and knobs for the selected lane, or a random pattern on three to five lanes (UNDO restores).";
         if (undoBtn().in(x, y)) return "Undo the last change (Ctrl/Cmd+Z). Right-click = redo.";
         for (int k = 0; k < kLaneParams; ++k) if (knobR(k).in(x, y))
             return k == kKnobs ? "MIX: how much of this effect replaces the sound while it is on." : "Drag to set, double-click to reset. With a step locked (right-click a step) it sets that step only.";
@@ -1430,6 +1437,12 @@ protected:
         const bool right = ev.button == kMouseButtonRight;
 
         if (gripR().in(x, y) && overlay == ovNone) { drag = dkResize; resizeStartW = getWidth(); grabX = ev.pos.getX(); grabY = ev.pos.getY(); return true; }
+        if (rndOpen) {
+            const int h = kframe::hit(barInfo(), x, y);
+            rndOpen = false;
+            if (h >= kframe::hRandomItem) randomize(h - kframe::hRandomItem == 1);
+            repaint(); return true;
+        }
         if (overlay == ovPresets) { presetsClick(x, y); return true; }
         if (overlay == ovLicense) return licenseClick(x, y);
         if (overlay == ovUpdate) return updateClick(x, y);
@@ -1539,8 +1552,7 @@ protected:
         if (patCopy().in(x, y)) { patClip = editPattern(); showPatMsg("A" + std::to_string(patClip + 1) + " copied"); return true; }
         if (patPaste().in(x, y) && patClip >= 0) { char b[32]; std::snprintf(b, sizeof(b), "cp %d %d", patClip, editPattern()); sendCmd(b); showPatMsg("pasted"); return true; }
         if (patClear().in(x, y)) { char b[24]; std::snprintf(b, sizeof(b), "cl %d", editPattern()); sendCmd(b); lockStep = -1; repaint(); return true; }
-        if (rndLaneBtn().in(x, y)) { randomize(false); return true; }
-        if (rndAllBtn().in(x, y)) { randomize(true); return true; }
+        if (rndBtn().in(x, y)) { rndOpen = true; repaint(); return true; }
         if (undoBtn().in(x, y)) { if (right) redo(); else undo(); return true; }
         // editor
         for (int i = 0; i < kMods; ++i) if (lfoTab(i).in(x, y)) { edLfo = edLfo == i ? -1 : i; repaint(); return true; }
@@ -1667,6 +1679,7 @@ private:
     std::string patMsg; double patMsgUntil = 0;
     std::string presetNameStr = "Init", presetMsg, saveName; bool saveConfirm = false;
     std::vector<std::string> userPresets;
+    bool rndOpen = false;
     std::deque<Snap> undoStack, redoStack; bool restoring = false; double lastSnapAt = -10.0; std::string lastSnapWhat;
     std::unique_ptr<upd::Checker> updater; int updLastState = -1;
     lic::Info licInfo; std::string licMsg;
