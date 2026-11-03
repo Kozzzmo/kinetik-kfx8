@@ -85,3 +85,4 @@ View file `KinetikKFX8-view.txt` ("skin zoom").
   COPY PASTE CLEAR | -LOCKS | the plug-in's extras on the right.
 - Next steps agreed: the KDSP-16 preset browser everywhere, PATTERNS block, knob pages / LFO order / names, then KJNG-2.
 - KFX-8: no REC (`hasRec` false); RANDOM = LANE / PATTERN (`randomize(false/true)`), `rndOpen`; FILL (HOLD) = `fillPerfBtn` in the bar; PATTERNS row CHAIN COPY PASTE CLEAR at y 220, A01-A16 4 x 4 from y 258; LFO tabs y 516, LANE EDITOR y 552.
+- 0.7.0 (dice + RANDOM that remembers, as KDSP-16 0.23.0): `rndLast` (default PATTERN); dice `diceLane` {756, 66} (ALL ON {784, 66, 68}), `dicePat` {956, 193}.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- **RANDOM in one click.** The RANDOM button now does again what is written below it (the last choice); its arrow opens the menu to choose another.
+- **Dice**: a die in the lane toolbar (the selected lane) and next to PATTERNS (a new pattern).
+
 ## 0.6.0
 
 - **Same layout as the other Kinetik plug-ins.** One window size (1180 x 800) and a common bottom bar at the same place in every plug-in: REC / CLICK, RANDOM (a menu), FILL (HOLD), UNDO (shows what it undoes), the plug-in's own buttons, PRESETS (with the preset's name) and SAVE. PAT / PLAY / BPM / SKIN keep the same spot in the header.

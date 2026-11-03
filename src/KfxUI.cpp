@@ -206,7 +206,7 @@ protected:
     R copyLaneBtn() const { return {562.f, 66.f, 60.f, 26.f}; }
     R pasteLaneBtn() const { return {626.f, 66.f, 60.f, 26.f}; }
     R clearLaneBtn() const { return {690.f, 66.f, 62.f, 26.f}; }
-    R fillBtn() const { return {780.f, 66.f, 72.f, 26.f}; }
+    R fillBtn() const { return {784.f, 66.f, 68.f, 26.f}; }
     // lanes are listed in their processing order (0.4); while a lane is dragged the list shows where it would land
     int rowOf(int l) const
     {
@@ -601,9 +601,17 @@ protected:
         b.preset = presetNameStr;
         b.randomOpen = rndOpen;
         b.randomItems = {{"LANE", "the selected lane"}, {"PATTERN", "three to five lanes"}};
+        b.randomLast = rndLast ? "pattern" : "lane";
         return b;
     }
-    void drawBottomBar() { kframe::Draw<R, KfxUI>::drawBar(*this, barInfo()); }
+    // dice (one click, no menu): the selected lane (toolbar), the pattern (PATTERNS)
+    static kframe::Rc diceLane() { return {756.f, 66.f, 24.f, 26.f}; }
+    static kframe::Rc dicePat() { return {956.f, 193.f, 22.f, 22.f}; }
+    void drawBottomBar()
+    {
+        kframe::Draw<R, KfxUI>::dice(*this, diceLane()); kframe::Draw<R, KfxUI>::dice(*this, dicePat());
+        kframe::Draw<R, KfxUI>::drawBar(*this, barInfo());
+    }
 
     // the selected lane: LCD (name, what it does, a picture of its knobs) + its 5 knobs
     bool knobUsed(int k) const { return k >= kKnobs || kLaneDefs[selLane].knob[k] != nullptr; }
@@ -1268,7 +1276,10 @@ protected:
         for (int i = 0; i < 3; ++i) if (gKnob(i).in(x, y))
             return i == 0 ? "DRY/WET: how much of the effects you hear (100% = only the effect chain)." : (i == 1 ? "INPUT: level into the effects." : "OUTPUT: level out of KFX-8.");
         for (int i = 0; i < kPatterns; ++i) if (patBtn(i).in(x, y)) return "Choose the pattern (while playing it starts at the end of the current one). MIDI notes C3 to D#4 choose A01 to A16.";
-        if (rndBtn().in(x, y)) return "RANDOM: random steps, locks and knobs for the selected lane, or a random pattern on three to five lanes (UNDO restores).";
+        if (kframe::randomArrow().in(x, y)) return "The RANDOM menu: the selected lane or a pattern on three to five lanes; RANDOM then remembers the choice.";
+        if (rndBtn().in(x, y)) return "RANDOM: does again what is written below it (choose with the arrow). UNDO restores.";
+        if (diceLane().in(x, y)) return "Random steps, locks and knobs for the selected lane. UNDO restores.";
+        if (dicePat().in(x, y)) return "A random pattern on three to five lanes. UNDO restores.";
         if (undoBtn().in(x, y)) return "Undo the last change (Ctrl/Cmd+Z). Right-click = redo.";
         for (int k = 0; k < kLaneParams; ++k) if (knobR(k).in(x, y))
             return k == kKnobs ? "MIX: how much of this effect replaces the sound while it is on." : "Drag to set, double-click to reset. With a step locked (right-click a step) it sets that step only.";
@@ -1440,7 +1451,7 @@ protected:
         if (rndOpen) {
             const int h = kframe::hit(barInfo(), x, y);
             rndOpen = false;
-            if (h >= kframe::hRandomItem) randomize(h - kframe::hRandomItem == 1);
+            if (h >= kframe::hRandomItem) { rndLast = h - kframe::hRandomItem; randomize(rndLast == 1); }
             repaint(); return true;
         }
         if (overlay == ovPresets) { presetsClick(x, y); return true; }
@@ -1552,7 +1563,10 @@ protected:
         if (patCopy().in(x, y)) { patClip = editPattern(); showPatMsg("A" + std::to_string(patClip + 1) + " copied"); return true; }
         if (patPaste().in(x, y) && patClip >= 0) { char b[32]; std::snprintf(b, sizeof(b), "cp %d %d", patClip, editPattern()); sendCmd(b); showPatMsg("pasted"); return true; }
         if (patClear().in(x, y)) { char b[24]; std::snprintf(b, sizeof(b), "cl %d", editPattern()); sendCmd(b); lockStep = -1; repaint(); return true; }
-        if (rndBtn().in(x, y)) { rndOpen = true; repaint(); return true; }
+        if (kframe::randomArrow().in(x, y)) { rndOpen = true; repaint(); return true; }
+        if (rndBtn().in(x, y)) { randomize(rndLast == 1); return true; }
+        if (diceLane().in(x, y)) { randomize(false); return true; }
+        if (dicePat().in(x, y)) { randomize(true); return true; }
         if (undoBtn().in(x, y)) { if (right) redo(); else undo(); return true; }
         // editor
         for (int i = 0; i < kMods; ++i) if (lfoTab(i).in(x, y)) { edLfo = edLfo == i ? -1 : i; repaint(); return true; }
@@ -1680,6 +1694,7 @@ private:
     std::string presetNameStr = "Init", presetMsg, saveName; bool saveConfirm = false;
     std::vector<std::string> userPresets;
     bool rndOpen = false;
+    int rndLast = 1;   // what a click on RANDOM does again: 0 = LANE, 1 = PATTERN
     std::deque<Snap> undoStack, redoStack; bool restoring = false; double lastSnapAt = -10.0; std::string lastSnapWhat;
     std::unique_ptr<upd::Checker> updater; int updLastState = -1;
     lic::Info licInfo; std::string licMsg;
